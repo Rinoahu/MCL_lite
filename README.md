@@ -34,10 +34,16 @@ Make sure that you have the following installed
 	...
 
 -I: float. inflation parameter for mcl
+
 -a:   int. cpu number
+
 -o:   str. name of output file
+
 -d:   T|F. is the graph directed? Default is False
+
 -g:   int. how many gpus to use for speedup. Default is 0
+
 -r:   T|F. resume the work. Default is T
--m:   int. memory usage limitation. Deaault is 4GB
+
+-m:   int. memory usage limitation. Default is 4GB
 
