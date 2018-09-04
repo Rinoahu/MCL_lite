@@ -5,8 +5,7 @@ MCL_lite is a memory-efficient implementation of Markov Clustering Algorithm for
 
 Make sure that you have the following installed
 
-1. Python2.7 (Recommend [Anaconda](https://www.continuum.io/downloads#linux "https://www.continuum.io/downloads#linux" ) ) or [PyPy2.7](http://pypy.org/download.html "http:/
-/pypy.org/download.html")(v5.10 or greater) and Packages:
+1. Python2.7 (Recommend [Anaconda](https://www.continuum.io/downloads#linux "https://www.continuum.io/downloads#linux" ))
     1. [numpy](http://www.numpy.org/ "http://www.numpy.org/")
     2. [scipy](https://www.scipy.org/ "https://www.scipy.org/")
     3. [sklearn](http://scikit-learn.org/stable/ "http://scikit-learn.org/stable/")
