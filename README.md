@@ -10,12 +10,11 @@ Make sure that you have the following installed
     1. [numpy](http://www.numpy.org/ "http://www.numpy.org/")
     2. [scipy](https://www.scipy.org/ "https://www.scipy.org/")
     3. [sklearn](http://scikit-learn.org/stable/ "http://scikit-learn.org/stable/")
-    4. Install dependency packages via pip:
+    4. [numba](https://numba.pydata.org/ "https://numba.pydata.org/")
+
+    5. Install dependency packages via pip or conda:
 
         $ pip install scipy numpy scikit-learn
-
-    5. Install dependency packages via conda:
-
         $ conda install scipy numpy scikit-learn
 
 
