@@ -39,11 +39,11 @@ Make sure that you have the following installed
 
 -o:   str. name of output file
 
--d:   T|F. is the graph directed? Default is False
+-d:   t|f. is the graph directed? Default is t(true)
 
 -g:   int. how many gpus to use for speedup. Default is 0
 
--r:   T|F. resume the work. Default is T
+-r:   t|f. resume the work after crash. Default is f(false)
 
 -m:   int. memory usage limitation. Default is 4GB
 
