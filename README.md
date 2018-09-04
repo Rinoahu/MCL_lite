@@ -1,5 +1,5 @@
 # MCL_lite
-a memory-efficient implementation of Markov Clustering Algorithm for large-scale of networks
+MCL_lite is a memory-efficient implementation of Markov Clustering Algorithm for large-scale of networks. It has finished clustering a network with 2 billion edges on a desktop with 16GB RAM while the original [MCL](https://micans.org/mcl/ "https://micans.org/mcl/") needs more than 100GB RAM.
 
 ## Requirement
 
