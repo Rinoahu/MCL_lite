@@ -2556,8 +2556,10 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
         j = i[:-1].split('\t')
         if len(j) == 3:
             qid, sid, score = j[:3]
-        else:
+        elif len(j) > 3:
             qid, sid, score = j[1:4]
+        else:
+            continue
 
         if qid not in q2n:
             q2n[qid] = None
@@ -2641,8 +2643,10 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
         j = i[:-1].split('\t')
         if len(j) == 3:
             qid, sid, score = j[:3]
-        else:
+        elif len(j) > 3:
             qid, sid, score = j[1:4]
+        else:
+            continue
 
         z = abs(float(score))
         x, y = map(q2n.get, [qid, sid])
