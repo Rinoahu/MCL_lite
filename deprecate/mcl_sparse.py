@@ -4266,12 +4266,12 @@ def merge_submat(fns, shape=(10**7, 10**7), csr=False, cpu=1):
         zns = map(submerge_wrapper, xys)
     else:
         print 'parallel_merge_submat'
-        zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper)(elem) for elem in xys)
-        #pool = mp.Pool(cpu)
-        #zns = pool.map(submerge_wrapper, xys)
-        #pool.terminate()
-        #pool.close()
-        #del pool
+        #zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper)(elem) for elem in xys)
+        pool = mp.Pool(cpu)
+        zns = pool.map(submerge_wrapper, xys)
+        pool.terminate()
+        pool.close()
+        del pool
         gc.collect()
     old_fns = [tmp_path+'/'+elem for elem in os.listdir(tmp_path) if not elem.endswith('_merge.npz')]
     for i in old_fns:
@@ -4429,12 +4429,12 @@ def merge_submat_gpu(fns, shape=(10**7, 10**7), csr=False, cpu=1):
         zns = map(submerge_wrapper_gpu, xys)
     else:
         print 'parallel_merge_submat'
-        zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper)(elem) for elem in xys)
-        #pool = mp.Pool(cpu)
-        #zns = pool.map(submerge_wrapper_gpu, xys)
-        #pool.terminate()
-        #pool.close()
-        #del pool
+        #zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper)(elem) for elem in xys)
+        pool = mp.Pool(cpu)
+        zns = pool.map(submerge_wrapper_gpu, xys)
+        pool.terminate()
+        pool.close()
+        del pool
         gc.collect()
     old_fns = [tmp_path+'/'+elem for elem in os.listdir(tmp_path) if not elem.endswith('_merge.npz')]
     for i in old_fns:
@@ -7318,13 +7318,13 @@ def expand_gpu(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=
         row_sums = map(prsum, xys)
     else:
         print 'row sum cpu > 1', cpu, len(xys)
-        row_sums = Parallel(n_jobs=cpu)(delayed(prsum)(elem) for elem in xys)
-        #pool = mp.Pool(cpu)
-        #row_sums = pool.map(prsum, xys)
-        #pool.terminate()
-        #pool.close()
-        #del pool
-        #gc.collect()
+        #row_sums = Parallel(n_jobs=cpu)(delayed(prsum)(elem) for elem in xys)
+        pool = mp.Pool(cpu)
+        row_sums = pool.map(prsum, xys)
+        pool.terminate()
+        pool.close()
+        del pool
+        gc.collect()
 
     gc.collect()
     rows_sum = sum([elem for elem in row_sums if type(elem) != type(None)])
@@ -8313,13 +8313,13 @@ def norm(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rtol
         errs = map(sdiv_wrapper, xys)
     else:
         print 'norm cpu > 1', cpu, len(xys)
-        errs = Parallel(n_jobs=cpu)(delayed(sdiv_wrapper)(elem) for elem in xys)
-        #pool = mp.Pool(cpu)
-        #errs = pool.map(sdiv_wrapper, xys)
-        #pool.terminate()
-        #pool.close()
-        #del pool
-        #gc.collect()
+        #errs = Parallel(n_jobs=cpu)(delayed(sdiv_wrapper)(elem) for elem in xys)
+        pool = mp.Pool(cpu)
+        errs = pool.map(sdiv_wrapper, xys)
+        pool.terminate()
+        pool.close()
+        del pool
+        gc.collect()
 
     gc.collect()
 
@@ -8401,13 +8401,12 @@ def norm_gpu(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, 
     else:
         print 'norm cpu > 1', cpu, len(xys)
         #errs = Parallel(n_jobs=cpu)(delayed(sdiv_wrapper)(elem) for elem in xys)
-        errs = Parallel(n_jobs=cpu)(delayed(sdiv_wrapper_gpu)(elem) for elem in xys)
-        #pool = mp.Pool(cpu)
-        #errs = pool.map(sdiv_wrapper_gpu, xys)
-        #pool.terminate()
-        #pool.close()
-        #del pool
-        #gc.collect()
+        pool = mp.Pool(cpu)
+        errs = pool.map(sdiv_wrapper_gpu, xys)
+        pool.terminate()
+        pool.close()
+        del pool
+        gc.collect()
 
     gc.collect()
 
