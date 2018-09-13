@@ -3160,7 +3160,7 @@ def pruning(qry, tmp_path=None, prune=1/4e3, S=1400, R=600, cpu=1):
 
     # find the threshold
     xys = [[[a, b, tmp_path, prune, S, R] for b in xrange(N)] for a in xrange(N)]
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         cutoff = map(find_cutoff, xys)
     else:
         zns = Parallel(n_jobs=cpu)(delayed(find_cutoff)(elem) for elem in xys)
@@ -4050,7 +4050,7 @@ def merge_submat0(fns, shape=(10**7, 10**7), csr=False, cpu=1):
             cols = names[j:j+2]
             xys.append([i, j, rows, cols, shape, tmp_path, csr])
 
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         zns = map(submerge, xys)
     else:
         zns = Parallel(n_jobs=cpu)(delayed(submerge)(elem) for elem in xys)
@@ -4109,7 +4109,7 @@ def merge_submat1(fns, shape=(10**7, 10**7), csr=False, cpu=1):
             xys[flag%cpu].append(xy)
             flag += 1
 
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         zns = map(submerge_wrapper, xys)
     else:
         zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper)(elem) for elem in xys)
@@ -4156,15 +4156,15 @@ def merge_submat2(fns, shape=(10**7, 10**7), csr=False, cpu=1):
             xys[flag%cpu].append(xy)
             flag += 1
 
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         zns = map(submerge_wrapper, xys)
     else:
-        #zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper)(elem) for elem in xys)
-        pool = mp.Pool(cpu)
-        zns = pool.map(submerge_wrapper, xys)
-        pool.terminate()
-        pool.close()
-        del pool
+        zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper)(elem) for elem in xys)
+        #pool = mp.Pool(cpu)
+        #zns = pool.map(submerge_wrapper, xys)
+        #pool.terminate()
+        #pool.close()
+        #del pool
         #gc.collect()
 
     nnz = 0
@@ -4208,16 +4208,16 @@ def merge_submat3(fns, shape=(10**7, 10**7), csr=False, cpu=1):
             xys[flag%cpu].append(xy)
             flag += 1
 
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
     #if 1:
         zns = map(submerge_wrapper, xys)
     else:
-        #zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper)(elem) for elem in xys)
-        pool = mp.Pool(cpu)
-        zns = pool.map(submerge_wrapper, xys)
-        pool.terminate()
-        pool.close()
-        del pool
+        zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper)(elem) for elem in xys)
+        #pool = mp.Pool(cpu)
+        #zns = pool.map(submerge_wrapper, xys)
+        #pool.terminate()
+        #pool.close()
+        #del pool
         gc.collect()
 
     nnz = 0
@@ -4261,7 +4261,8 @@ def merge_submat(fns, shape=(10**7, 10**7), csr=False, cpu=1):
             xys[flag%cpu].append(xy)
             flag += 1
 
-    if cpu <= 1:
+    #if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
     #if 1:
         zns = map(submerge_wrapper, xys)
     else:
@@ -4958,7 +4959,8 @@ def bmerge0(zs, cpu=1):
                     unpair.append(z0)
                 except:
                     unpair = [z0]
-        if cpu <= 1:
+        #if cpu <= 1:
+        if cpu <= 1 or len(xys) <= 1
             new_zs = map(badd, xys)
         else:
             new_zs = Parallel(n_jobs=cpu)(delayed(badd)(elem) for elem in xys)
@@ -4999,7 +5001,8 @@ def bmerge(zs, cpu=1):
         else:
             unpair = tmp
 
-        if cpu <= 1:
+        #if cpu <= 1:
+        if cpu <= 1 or len(xys) <= 1:
             new_zs = map(badd, xys)
         else:
             new_zs = Parallel(n_jobs=cpu)(delayed(badd)(elem) for elem in xys)
@@ -5069,7 +5072,8 @@ def bmerge_disk(zs, cpu=1):
             else:
                 unpair.append(zs[idx:idx+4])
 
-        if cpu <= 1:
+        #if cpu <= 1:
+        if cpu <= 1 or len(xys) <= 1:
             new_zs = map(badd_disk, xys)
         else:
             new_zs = Parallel(n_jobs=cpu)(delayed(badd_disk)(elem) for elem in xys)
@@ -5124,7 +5128,11 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
     #    zs = map(bkmat, xyn)
     #else:
     #    zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
-    zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+    if len(xyn) > 1 and cpu > 1:
+        zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+    else:
+        zs = map(bkmat, xyn)
+
     z = bmerge(zs, cpu=cpu)
     #z = bmerge_disk(zs, cpu=cpu)
     print 'breakpoint', zs, z
@@ -6525,7 +6533,7 @@ def expand4(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-
             yn = tmp_path + '/' + j + '_' + b + '.npz'
             xys.append([xn, yn, shape, csr])
 
-        if len(xys) > 1:
+        if len(xys) > 1 and cpu > 1:
             zns = Parallel(n_jobs=cpu)(delayed(sdot)(elem) for elem in xys)
         elif len(xys) == 1:
             zns = [sdot(xys[0])]
@@ -6642,7 +6650,7 @@ def expand6(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-
             xys.append([x, y, d, qry, shape, tmp_path, csr, I, prune])
 
     #zns = map(element_wrapper, xys)
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'cpu < 1', cpu, len(xys)
         zns = map(element_wrapper, xys)
     else:
@@ -6685,7 +6693,7 @@ def expand7(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-
             xys.append([x, y, d, qry, shape, tmp_path, csr, I, prune])
 
     #zns = map(element_wrapper, xys)
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'cpu < 1', cpu, len(xys)
         zns = map(element_wrapper, xys)
     else:
@@ -6765,7 +6773,7 @@ def expand8(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-
             xys.append([x, y, d, qry, shape, tmp_path, csr, I, prune])
 
     #zns = map(element_wrapper, xys)
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'cpu < 1', cpu, len(xys)
         zns = map(element_wrapper, xys)
     else:
@@ -6781,7 +6789,7 @@ def expand8(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-
         #rfn = row_sum_ns.pop()
         #xys[i%cpu].append(rfn)
         xys[i%cpu].append(row_sum_ns[i])
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'row sum cpu < 1', cpu, len(xys)
         row_sums = map(prsum, xys)
     else:
@@ -6842,18 +6850,18 @@ def expand9(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-
             flag += 1
 
     #zns = map(element_wrapper, xys)
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'cpu < 1', cpu, len(xys)
         zns = map(element_wrapper, xys)
     else:
         print 'cpu > 1', cpu, len(xys)
-        #zns = Parallel(n_jobs=cpu)(delayed(element_wrapper)(elem) for elem in xys)
-        pool = mp.Pool(cpu)
-        zns = pool.map(element_wrapper, xys)
-        pool.terminate()
-        pool.close()
-        del pool
-        gc.collect()
+        zns = Parallel(n_jobs=cpu)(delayed(element_wrapper)(elem) for elem in xys)
+        #pool = mp.Pool(cpu)
+        #zns = pool.map(element_wrapper, xys)
+        #pool.terminate()
+        #pool.close()
+        #del pool
+        #gc.collect()
 
 
     gc.collect()
@@ -6869,7 +6877,7 @@ def expand9(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-
     Nrs = len(row_sum_ns)
     for i in xrange(Nrs):
         xys[i%cpu].append(row_sum_ns[i])
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'row sum cpu < 1', cpu, len(xys)
         row_sums = map(prsum, xys)
     else:
@@ -6933,7 +6941,7 @@ def expand10(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e
             flag += 1
 
     #zns = map(element_wrapper, xys)
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'cpu < 1', cpu, len(xys)
         zns = map(element_wrapper, xys)
     else:
@@ -6961,7 +6969,7 @@ def expand10(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e
     Nrs = len(row_sum_ns)
     for i in xrange(Nrs):
         xys[i%cpu].append(row_sum_ns[i])
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'row sum cpu < 1', cpu, len(xys)
         row_sums = map(prsum, xys)
     else:
@@ -7030,7 +7038,7 @@ def expand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-6
     #    #pool.close()
     #    #del pool
     #    #gc.collect()
-    if fast and cpu > 1:
+    if fast and cpu > 1 and len(xys) > 1:
         zns = Parallel(n_jobs=cpu)(delayed(element_wrapper)(elem) for elem in xys)
     else:
         zns = map(element_wrapper, xys)
@@ -7048,7 +7056,7 @@ def expand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-6
     Nrs = len(row_sum_ns)
     for i in xrange(Nrs):
         xys[i%cpu].append(row_sum_ns[i])
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'row sum cpu < 1', cpu, len(xys)
         row_sums = map(prsum, xys)
     else:
@@ -7104,7 +7112,7 @@ def expand_gpu0(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune
             flag += 1
 
     #zns = map(element_wrapper, xys)
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'cpu < 1', cpu, len(xys)
         zns = map(element_wrapper_gpu, xys)
     else:
@@ -7124,7 +7132,7 @@ def expand_gpu0(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune
     Nrs = len(row_sum_ns)
     for i in xrange(Nrs):
         xys[i%cpu].append(row_sum_ns[i])
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'row sum cpu < 1', cpu, len(xys)
         row_sums = map(prsum, xys)
     else:
@@ -7187,18 +7195,18 @@ def expand_gpu1(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune
             flag += 1
 
     #zns = map(element_wrapper, xys)
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'cpu < 1', cpu, len(xys)
         zns = map(element_wrapper_gpu, xys)
     else:
         print 'cpu > 1', cpu, len(xys)
-        #zns = Parallel(n_jobs=cpu)(delayed(element_wrapper_gpu)(elem) for elem in xys)
-        pool = mp.Pool(cpu)
-        zns = pool.map(element_wrapper_gpu, xys)
-        pool.terminate()
-        pool.close()
-        del pool
-        gc.collect()
+        zns = Parallel(n_jobs=cpu)(delayed(element_wrapper_gpu)(elem) for elem in xys)
+        #pool = mp.Pool(cpu)
+        #zns = pool.map(element_wrapper_gpu, xys)
+        #pool.terminate()
+        #pool.close()
+        #del pool
+        #gc.collect()
 
 
 
@@ -7215,18 +7223,18 @@ def expand_gpu1(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune
     Nrs = len(row_sum_ns)
     for i in xrange(Nrs):
         xys[i%cpu].append(row_sum_ns[i])
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'row sum cpu < 1', cpu, len(xys)
         row_sums = map(prsum, xys)
     else:
         print 'row sum cpu > 1', cpu, len(xys)
-        #row_sums = Parallel(n_jobs=cpu)(delayed(prsum)(elem) for elem in xys)
-        pool = mp.Pool(cpu)
-        row_sums = pool.map(prsum, xys)
-        pool.terminate()
-        pool.close()
-        del pool
-        gc.collect()
+        row_sums = Parallel(n_jobs=cpu)(delayed(prsum)(elem) for elem in xys)
+        #pool = mp.Pool(cpu)
+        #row_sums = pool.map(prsum, xys)
+        #pool.terminate()
+        #pool.close()
+        #del pool
+        #gc.collect()
 
 
     gc.collect()
@@ -7313,7 +7321,7 @@ def expand_gpu(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=
     Nrs = len(row_sum_ns)
     for i in xrange(Nrs):
         xys[i%cpu].append(row_sum_ns[i])
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'row sum cpu < 1', cpu, len(xys)
         row_sums = map(prsum, xys)
     else:
@@ -8165,7 +8173,7 @@ def norm6(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rto
     fp.flush()
     # normalize
     xys = [[elem, shape, csr, check, rtol, tmp_path] for elem in fns]
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'norm cpu < 1', cpu, len(xys)
         errs = map(sdiv, xys)
     else:
@@ -8228,18 +8236,18 @@ def norm7(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rto
         flag += 1
 
 
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'norm cpu < 1', cpu, len(xys)
         errs = map(sdiv_wrapper, xys)
     else:
         print 'norm cpu > 1', cpu, len(xys)
-        #errs = Parallel(n_jobs=cpu)(delayed(sdiv_wrapper)(elem) for elem in xys)
-        pool = mp.Pool(cpu)
-        errs = pool.map(sdiv_wrapper, xys)
-        pool.terminate()
-        pool.close()
-        del pool
-        gc.collect()
+        errs = Parallel(n_jobs=cpu)(delayed(sdiv_wrapper)(elem) for elem in xys)
+        #pool = mp.Pool(cpu)
+        #errs = pool.map(sdiv_wrapper, xys)
+        #pool.terminate()
+        #pool.close()
+        #del pool
+        #gc.collect()
 
     gc.collect()
 
@@ -8395,7 +8403,7 @@ def norm_gpu(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, 
         flag += 1
 
 
-    if cpu <= 1:
+    if cpu <= 1 or len(xys) <= 1:
         print 'norm cpu < 1', cpu, len(xys)
         errs = map(sdiv_wrapper_gpu, xys)
     else:
