@@ -2530,12 +2530,7 @@ def mat_split8(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtyp
     return q2n, block
 
 
-
-
-
-
-
-
+# breaks the input network into smaller ones
 def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
@@ -2727,7 +2722,7 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
 
 
 # add split method for gpu
-def mat_split_gpu(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype='float32'):
+def mat_split_gpu(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -2761,6 +2756,17 @@ def mat_split_gpu(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, d
     N = len(q2n)
     shape = (N, N)
 
+    # update chunk
+    print 'memory limit', mem
+    blk0 = N * 1e3 * 12 * 50 / mem / 1e9
+    blk1 = (N * 1e3 * cpu * 6e2 / mem / 1e9) ** .5
+    chunk = N * 1e3 / blk1
+    block0 = int(N / blk0) + 1
+    block1 = int(N / blk1) + 1
+    block = (block0 + block1) // 2
+
+
+    '''
     # get the size of input file
     #tsize = os.path.getsize(qry)
     #tstep = max(tsize // (chunk*12), 1)
@@ -2782,6 +2788,7 @@ def mat_split_gpu(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, d
         block = N
         print 'split block cpu=1', block, N // block, lines*3, chunk
         cpu = 1
+    '''
 
     block = int(block)
     #qn = q2n.keys()
@@ -2938,7 +2945,7 @@ def load_matrix_gpu(qry, shape=(10**8, 10**8), csr=False):
 
 
 # prune function
-def prune_proto(x, p=1/4e4, S=500, R=300):
+def prune_proto(x, p=1/4e4, S=500, R=600):
     R = min(S, R)
     R, C = x.shape
     dif = np.diff(x.indptr)
@@ -2948,10 +2955,10 @@ def prune_proto(x, p=1/4e4, S=500, R=300):
         ed = x.indptr[st+1]
         dat = x.data[st: ed]
         n = (dat > p).sum()
-        if n > S:
-            dat[dat.argsort()[:-S]] = 0
-        elif n < R:
+        if n < R:
             dat[dat.argsort()[:-R]] = 0
+        elif n > S:
+            dat[dat.argsort()[:-S]] = 0
         else:
             dat[dat<p] = 0
 
@@ -4430,7 +4437,7 @@ def merge_submat_gpu(fns, shape=(10**7, 10**7), csr=False, cpu=1):
         zns = map(submerge_wrapper_gpu, xys)
     else:
         print 'parallel_merge_submat'
-        zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper)(elem) for elem in xys)
+        zns = Parallel(n_jobs=cpu)(delayed(submerge_wrapper_gpu)(elem) for elem in xys)
         #pool = mp.Pool(cpu)
         #zns = pool.map(submerge_wrapper_gpu, xys)
         #pool.terminate()
@@ -4960,7 +4967,7 @@ def bmerge0(zs, cpu=1):
                 except:
                     unpair = [z0]
         #if cpu <= 1:
-        if cpu <= 1 or len(xys) <= 1
+        if cpu <= 1 or len(xys) <= 1:
             new_zs = map(badd, xys)
         else:
             new_zs = Parallel(n_jobs=cpu)(delayed(badd)(elem) for elem in xys)
@@ -6450,8 +6457,13 @@ def element_wrapper_gpu(elems):
                         z += xyg.copy_to_host()
                         del xyg
                     except:
-                        z += xy
-                        del xy
+                        try:
+                            z += xy
+                            del xy
+                        except:
+                            #print 'xyg_exist', xyg.copy_to_host()
+                            z += xyg.copy_to_host()
+                            del xyg
 
                     z += zg.copy_to_host()
                     del zg
@@ -6500,6 +6512,90 @@ def element_wrapper_gpu(elems):
         pass
     return outs
 
+
+
+def element_wrapper_gpu9(elems):
+
+    if len(elems) <= 1:
+        return []
+
+    # init gpu
+    gid = elems[0] % len(pyculib.cuda.devices.gpus.lst)
+    pyculib.cuda.select_device(gid)
+    clf = pyculib.sparse.Sparse()
+    csrgemm_ez = clf.csrgemm_ez
+    has_gpu = 1
+
+    x, y, d, qry, shape, tmp_path, csr, I, prune = elems[1]
+    outs = []
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    for elem in elems[1:]:
+        xi, yi, d, qry, shape, tmp_path, csr, I, prune = elem
+        zg = pyculib.sparse.csr_matrix(shape)
+        z = sparse.csr_matrix(shape, dtype='float32')
+        for i in xrange(d):
+            xn = tmp_path + '/' + str(xi) + '_' + str(i) + '.npz'
+            yn = tmp_path + '/' + str(i) + '_' + str(yi) + '.npz'
+            print 'xi', xi, 'yi', yi
+            try:
+                x = load_matrix(xn, shape=shape, csr=csr)
+            except:
+                print 'can not load x elem_wrapper_gpu', xn, csr
+                continue
+            try:
+                y = load_matrix(yn, shape=shape, csr=csr)
+            except:
+                print 'can not load y elem_wrapper_gpu', yn, csr
+                continue
+            try:
+                xyg = csrgemm_ez(x, y)
+            except:
+                z += csrmm_ez(x, y)
+                continue
+            try:
+                zg = csrgeam_ez(zg, xyg, clf)
+            except:
+                z += csrmm_ez(x, y)
+            del xyg
+            gc.collect()
+
+        #z = sparse.csr_matrix(shape, dtype='float32')
+        z += zg.copy_to_host()
+        #z = zg.copy_to_host()
+        del zg
+        gc.collect()
+        if z.nnz <= 0:
+            continue
+
+        z.eliminate_zeros()
+        z.data **= I
+        z.eliminate_zeros()
+
+        # remove element < prune
+        row_sum = np.asarray(z.sum(0), 'float32')[0]
+        norm_dat = z.data / row_sum.take(z.indices, mode='clip')
+        z.data[norm_dat < prune] = 0 
+        z.eliminate_zeros()
+       
+
+        nnz = z.nnz
+        xyn = tmp_path + '/' + str(xi) + '_' + str(yi) + '.npz'
+        sparse.save_npz(xyn + '_new', z)
+
+        row_sum_n = tmp_path + '/' + str(xi) + '_' + str(yi) + '_rowsum.npz'
+        np.savez_compressed(row_sum_n, row_sum)
+        del z
+        gc.collect()
+        #cp.cuda.memory.gc.collect() 
+        outs.append([row_sum_n, xyn, nnz])
+
+    try:
+        pyculib.cuda.close()
+    except:
+        pass
+    return outs
 
 
 
@@ -9219,7 +9315,7 @@ def mcl8(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=
 
 
 # add memory usage limit
-def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1./4000, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -9280,8 +9376,8 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=1
             fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu)
 
         pruning(qry, tmp_path, cpu=cpu)
-        #if nnz < chunk / 4 and len(fns) > cpu * cpu:
-        if nnz < chunk / 4 or nnz <= N:
+        if nnz < chunk / 4 and len(fns) > cpu ** 2:
+        #if nnz < chunk / 4 or nnz <= N:
             print 'we try to merge 4 block into one', nnz, chunk/4
             row_sum_new, fns_new, nnz_new, merged = merge_submat(fns, shape, csr=True, cpu=cpu)
             #row_sum_new, fns_new, nnz_new, merged = merge_submat(fns, shape, csr=True)
@@ -9297,6 +9393,7 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=1
             break
 
     # get connect components
+    '''
     print 'construct from graph', fns
     g = load_matrix(fns[0], shape, True)
     cs = csgraph.connected_components(g)
@@ -9307,6 +9404,20 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=1
 
     del g
     gc.collect()
+    '''
+
+    g = load_matrix(fns[0], shape, True)
+    #cs = csgraph.connected_components(g)
+    for fn in fns[1:]:
+        g += load_matrix(fn, shape, True)
+        #ci = csgraph.connected_components(g)
+        #cs = merge_connected(cs, ci)
+
+    cs = csgraph.connected_components(g)
+    del g
+    gc.collect()
+
+
 
     # print 'find components', cs
     # load q2n
@@ -9529,13 +9640,13 @@ def mcl_gpu1(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, a
 
 
 # add pruning function after normalization
-def mcl_gpu(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, gpu=1):
+def mcl_gpu(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, gpu=1, mem=4):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
     os.system('rm -rf %s' % tmp_path)
 
-    q2n, block = mat_split_gpu(qry, chunk=chunk, cpu=cpu, sym=sym)
+    q2n, block = mat_split_gpu(qry, chunk=chunk, cpu=cpu, sym=sym, mem=mem)
     N = len(q2n)
     #prune = min(prune, 100. / N)
 
@@ -9604,6 +9715,7 @@ def mcl_gpu(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, at
 
     # get connect components
     print 'construct from graph', fns
+    '''
     g = load_matrix_gpu(fns[0], (N, N), True)
     cs = csgraph.connected_components(g)
     for fn in fns[1:]:
@@ -9616,6 +9728,21 @@ def mcl_gpu(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, at
 
     del g
     gc.collect()
+    '''
+
+    g = load_matrix_gpu(fns[0], (N, N), True)
+    for fn in fns[1:]:
+        try:
+            g += load_matrix_gpu(fn, (N, N), True)
+        except:
+            continue
+        #ci = csgraph.connected_components(g)
+        #cs = merge_connected(cs, ci)
+
+    cs = csgraph.connected_components(g)
+    del g
+    gc.collect()
+
 
 
     # load q2n
@@ -9798,7 +9925,7 @@ if __name__ == '__main__':
 
     argv = sys.argv
     # recommand parameter:
-    args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 'F', '-g': '0', '-r': 'f', '-m': '4'}
+    args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 't', '-g': '0', '-r': 'f', '-m': '4'}
 
     N = len(argv)
     for i in xrange(1, N):
@@ -9858,7 +9985,7 @@ if __name__ == '__main__':
     #if has_gpu and gpu > 0 and device > 0:
     #if has_gpu and gpu > 0:
     if gpu > 0:
-        mcl_gpu(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, gpu=gpu)
+        mcl_gpu(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, gpu=gpu, mem=mem)
     else:
         mcl(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
         #mcl_lite(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym)
