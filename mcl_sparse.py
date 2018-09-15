@@ -3068,7 +3068,7 @@ def find_lower0(indptr, data, prune=1e-4, R=300):
 
 
 @njit(cache=True)
-def find_lower(indptr, data, prune=1e-4, S=1000, R=300):
+def find_lower(indptr, data, prune=1./4000, S=1000, R=500):
     n = indptr.size
     ps = np.empty(n, data.dtype)
     for i in xrange(n-1):
