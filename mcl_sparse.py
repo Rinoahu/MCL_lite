@@ -3040,10 +3040,13 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
     return a2, b2, c2
 
 
-def csrmerge(x0, x1, S=1000):
+#def csrmerge(x0, x1, S=1400):
+def csrmerge(x0, x1, prune=1/4e3, S=1100, R=1400):
+    thr = max(1./prune, S, R)
     a0, b0, c0 = x0.indices, x0.indptr, x0.data
     a1, b1, c1 = x1.indices, x1.indptr, x1.data
-    a2, b2, c2 = csrmg_jit(a0, b0, c0, a1, b1, c1, S)
+    #a2, b2, c2 = csrmg_jit(a0, b0, c0, a1, b1, c1, S)
+    a2, b2, c2 = csrmg_jit(a0, b0, c0, a1, b1, c1, thr)
     z = sparse.csr_matrix((c2, a2, b2), shape=x0.shape, dtype=x0.dtype)
     print 'after_csr_merge', z.nnz
     return z
@@ -3068,7 +3071,7 @@ def find_lower0(indptr, data, prune=1e-4, R=300):
 
 
 @njit(cache=True)
-def find_lower(indptr, data, prune=1./4000, S=1000, R=500):
+def find_lower(indptr, data, prune=1./4000, S=1100, R=1400):
     n = indptr.size
     ps = np.empty(n, data.dtype)
     for i in xrange(n-1):
@@ -3089,7 +3092,7 @@ def find_lower(indptr, data, prune=1./4000, S=1000, R=500):
                 ps[i] = row[idx_m]
                 #print'ps_less_2', ps[i]
 
-            elif j >= S:
+            elif j >= S >= R:
                 idx_s = row.argsort()
                 idx_m = idx_s[m-S]
                 ps[i] = row[idx_m]
@@ -3137,10 +3140,11 @@ def find_cutoff(elems):
         if type(x0) == type(None):
             x0 = x1
         else:
-            x0 = csrmerge(x0, x1, S)
+            #x0 = csrmerge(x0, x1, S)
+            x0 = csrmerge(x0, x1, p, S, R)
 
     print 'max_diff', np.diff(x0.indptr).max()
-    ps = find_lower(x0.indptr, x0.data, prune=p, R=R)
+    ps = find_lower(x0.indptr, x0.data, prune=p, S=S, R=R)
 
     # prune
     for elem in elems:
@@ -3158,7 +3162,7 @@ def find_cutoff(elems):
         sparse.save_npz(fn, x1)
 
 # prune
-def pruning(qry, tmp_path=None, prune=1/4e3, S=1400, R=600, cpu=1):
+def pruning(qry, tmp_path=None, prune=1/4e3, S=1100, R=1400, cpu=1):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
