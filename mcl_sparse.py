@@ -3041,6 +3041,7 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
 
 
 #def csrmerge(x0, x1, S=1400):
+@njit(cache=True)
 def csrmerge(x0, x1, prune=1/4e3, S=1100, R=1400):
     thr = max(1./prune, S, R)
     a0, b0, c0 = x0.indices, x0.indptr, x0.data
@@ -3074,6 +3075,7 @@ def find_lower0(indptr, data, prune=1e-4, R=300):
 def find_lower(indptr, data, prune=1./4000, S=1100, R=1400):
     n = indptr.size
     ps = np.empty(n, data.dtype)
+    #S = max(1./prune, R, S)
     for i in xrange(n-1):
         st, ed = indptr[i:i+2]
         m = ed - st
@@ -3092,7 +3094,7 @@ def find_lower(indptr, data, prune=1./4000, S=1100, R=1400):
                 ps[i] = row[idx_m]
                 #print'ps_less_2', ps[i]
 
-            elif j >= S >= R:
+            elif j > S:
                 idx_s = row.argsort()
                 idx_m = idx_s[m-S]
                 ps[i] = row[idx_m]
