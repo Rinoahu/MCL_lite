@@ -3043,7 +3043,7 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
 #def csrmerge(x0, x1, S=1400):
 #@njit(cache=True)
 def csrmerge(x0, x1, prune=1/4e3, S=1100, R=1400):
-    thr = max(1./prune, S, R)
+    thr = max(int(1./prune), S, R)
     a0, b0, c0 = x0.indices, x0.indptr, x0.data
     a1, b1, c1 = x1.indices, x1.indptr, x1.data
     #a2, b2, c2 = csrmg_jit(a0, b0, c0, a1, b1, c1, S)
