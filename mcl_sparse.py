@@ -3007,7 +3007,8 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
     #row_min = np.empty(b0.size, c0.dtype)
     assert b0.size == b1.size
     n = b0.size
-    nnz = min(a0.size + a1.size, b0.size*S)
+    #nnz = min(a0.size + a1.size, b0.size*S)
+    nnz = a0.size + a1.size
     a2, b2, c2 = np.empty(nnz, a0.dtype), np.empty(n, b0.dtype), np.empty(nnz, c0.dtype)
     b2[0] = 0
     ptr = 0
@@ -3043,7 +3044,7 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
 #def csrmerge(x0, x1, S=1400):
 #@njit(cache=True)
 def csrmerge(x0, x1, prune=1/4e3, S=1100, R=1400):
-    thr = max(int(1./prune), S, R)
+    thr = max(int(1./prune)+1, S, R)
     a0, b0, c0 = x0.indices, x0.indptr, x0.data
     a1, b1, c1 = x1.indices, x1.indptr, x1.data
     #a2, b2, c2 = csrmg_jit(a0, b0, c0, a1, b1, c1, S)
@@ -3094,7 +3095,7 @@ def find_lower(indptr, data, prune=1./4000, S=1100, R=1400):
                 ps[i] = row[idx_m]
                 #print'ps_less_2', ps[i]
 
-            elif j > S:
+            elif j > S and R < 1:
                 idx_s = row.argsort()
                 idx_m = idx_s[m-S]
                 ps[i] = row[idx_m]
