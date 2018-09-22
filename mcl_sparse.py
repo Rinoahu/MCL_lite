@@ -3095,7 +3095,7 @@ def find_lower(indptr, data, prune=1./4000, S=1100, R=1400):
                 ps[i] = row[idx_m]
                 #print'ps_less_2', ps[i]
 
-            elif j > S and R < 1:
+            elif j > S > R:
                 idx_s = row.argsort()
                 idx_m = idx_s[m-S]
                 ps[i] = row[idx_m]
