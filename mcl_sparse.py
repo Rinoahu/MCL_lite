@@ -3073,7 +3073,7 @@ def find_lower0(indptr, data, prune=1e-4, R=300):
 
 
 @njit(cache=True)
-def find_lower(indptr, data, prune=1./4000, S=1100, R=1400):
+def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400):
     n = indptr.size
     ps = np.empty(n, data.dtype)
     #S = max(1./prune, R, S)
@@ -3210,8 +3210,8 @@ def find_cutoff_col(elems):
         sparse.save_npz(fn, x1.T)
 
 
-#find_cutoff = find_cutoff_col
-find_cutoff = find_cutoff_row
+find_cutoff = find_cutoff_col
+#find_cutoff = find_cutoff_row
 
 
 # prune
@@ -4883,7 +4883,7 @@ def element4(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.
 
 
 
-def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1./4000, cpu=1):
+def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e3, cpu=1):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -5167,7 +5167,7 @@ def bmerge_disk(zs, cpu=1):
 
 
 # processing entry blocks one by one
-def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1./4000, cpu=1):
+def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e3, cpu=1):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -5297,7 +5297,7 @@ def element_gpu0(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
     return row_sum_n, xyn, nnz
 
 
-def element_gpu(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1./4000):
+def element_gpu(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e3):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -7160,7 +7160,7 @@ def expand10(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e
 
 
 
-def expand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1./4000, cpu=1, fast=False):
+def expand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e3, cpu=1, fast=False):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -8570,7 +8570,7 @@ def norm(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rtol
 
     if prune == None:
         #prune = .05 / shape[0]
-        prune = 1./4000
+        prune = 1/4e3
 
     Ns = [elem.split('.')[0].split('_') for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
     N = max([max(map(int, elem)) for elem in Ns]) + 1
@@ -8651,7 +8651,7 @@ def norm_gpu0(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False,
         tmp_path = qry + '_tmpdir'
 
     if prune == None:
-        prune = 1./4000
+        prune = 1/4e3
 
 
     block = shape[0]
@@ -9606,7 +9606,7 @@ def mcl8(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=
 
 
 # add memory usage limit
-def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1./4000, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
