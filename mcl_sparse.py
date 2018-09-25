@@ -3178,6 +3178,8 @@ def find_cutoff_col(elems):
         try:
             x1 = sparse.load_npz(fn).T
         except:
+            print 'max_fn', fn
+
             continue
 
         # sort x1
@@ -6548,7 +6550,7 @@ def element_wrapper_gpu(elems):
         # remove element < prune
         row_sum = np.asarray(z.sum(0), 'float32')[0]
         norm_dat = z.data / row_sum.take(z.indices, mode='clip')
-        z.data[norm_dat < prune] = 0 
+        #z.data[norm_dat < prune] = 0 
         z.eliminate_zeros()
        
 
@@ -8113,8 +8115,8 @@ def sdiv(parameters, row_sum=None, dtype='float32'):
         #xt = load_matrix(fn, shape=shape, csr=csr).T
         #xt.data /= row_sum.take(xt.indices, mode='clip')
         #x = xt.T
-        del xt
-        gc.collect()
+        #del xt
+        #gc.collect()
 
 
 
@@ -9639,6 +9641,7 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=
     #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=False, block=block, cpu=cpu)
     # norm
     fns, cvg, nnz = norm(qry, shape, tmp_path, csr=False, cpu=cpu)
+
     pruning(qry, tmp_path, prune=prune, cpu=cpu)
     # print 'finish norm', cvg
     # expension
