@@ -10317,7 +10317,7 @@ if __name__ == '__main__':
 
     #if has_gpu and gpu > 0 and device > 0:
     #if has_gpu and gpu > 0:
-    tmp_dir = os.getcwd() + '/' + ofn.split(os.sep)[-1] + '_tmpdir'
+    tmp_dir = os.getcwd() + '/' + ofn.split(os.sep)[-1].split(os.sep)[0] + '_tmpdir'
     os.system('mkdir %s'%tmp_dir)
 
     if gpu > 0:
