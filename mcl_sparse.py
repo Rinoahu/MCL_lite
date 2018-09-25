@@ -3073,6 +3073,43 @@ def find_lower0(indptr, data, prune=1e-4, R=300):
 
 
 @njit(cache=True)
+def find_lower1(indptr, data, prune=1/4e3, S=1100, R=1400):
+    n = indptr.size
+    ps = np.empty(n, data.dtype)
+    #S = max(1./prune, R, S)
+    for i in xrange(n-1):
+        st, ed = indptr[i:i+2]
+        m = ed - st
+        if m <= R:
+            row = data[st:ed]
+            ps[i] = 0
+            continue
+            #print'ps_less', ps[i]
+        else:
+            row = data[st:ed]
+            idx = row > prune
+            j = idx.sum()
+            if j <= R:
+                idx_s = row.argsort()
+                idx_m = idx_s[-R]
+                ps[i] = row[idx_m]
+                #print'ps_less_2', ps[i]
+
+            elif j > S > R:
+                idx_s = row.argsort()
+                idx_m = idx_s[-S]
+                ps[i] = row[idx_m]
+                #print'ps_more', ps[i]
+
+            else:
+                ps[i] = prune
+                #print'ps_good', ps[i]
+
+    return ps
+
+
+
+@njit(cache=True)
 def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400):
     n = indptr.size
     ps = np.empty(n, data.dtype)
@@ -3106,6 +3143,7 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400):
                 #print'ps_good', ps[i]
 
     return ps
+
 
 
 # remove element by give threshold
@@ -9613,9 +9651,10 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=
         tmp_path = qry + '_tmpdir'
 
     if rsm == False:
-        os.system('rm -rf %s' % tmp_path)
+        os.system('mkdir -p %s' % tmp_path)
+        os.system('rm -rf %s/*' % tmp_path)
 
-        q2n, block = mat_split(qry, chunk=chunk, cpu=cpu, sym=sym, mem=mem)
+        q2n, block = mat_split(qry, tmp_path=tmp_path, chunk=chunk, cpu=cpu, sym=sym, mem=mem)
 
         N = len(q2n)
 
@@ -10278,10 +10317,18 @@ if __name__ == '__main__':
 
     #if has_gpu and gpu > 0 and device > 0:
     #if has_gpu and gpu > 0:
+    tmp_dir = os.getcwd() + '/' + ofn.split(os.sep)[-1] + '_tmpdir'
+    os.system('mkdir %s'%tmp_dir)
+
     if gpu > 0:
-        mcl_gpu(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, gpu=gpu, mem=mem)
+        #mcl_gpu(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, gpu=gpu, mem=mem)
+        mcl_gpu(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, gpu=gpu, mem=mem)
+
+
     else:
-        mcl(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
+        #mcl(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
+        mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
+
         #mcl_lite(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym)
 
     # preprocess(qry)
