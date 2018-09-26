@@ -751,7 +751,7 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
         raise SystemExit()
 
     nnzs = x.size + y.size
-    if cpu <= 1 or nnzs <= 1e8:
+    if cpu <= 1 or nnzs <= 2e8:
     # shutdown threads
     #print 'try msav'
     #if 1:
@@ -799,7 +799,7 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
             zc = np.memmap(tmpfn+'_zc.npy', dtype=xc.dtype)
             z = np.memmap(tmpfn+'_z.npy', dtype=x.dtype)
             zr, zc, z = map(np.array, [zr, zc, z])
-            os.system('rm %s_z*.npy'%tmpfn)
+            os.system('rm -f %s_z*.npy'%tmpfn)
         except:
             zr = zc = z = None
 
