@@ -3164,7 +3164,7 @@ def rm_elem(indptr, data, prune):
 
         #print (row<p).sum(), row.size
 
-    print 'after_prune_rm', (data>0).sum()
+    print 'after_prune_rm', (data>0).sum(), (prune>0).sum()
 
 
 # find the threshold of prune by row
