@@ -507,7 +507,7 @@ def csrmm_msav2(xr, xc, x, yr, yc, y, visit):
 
 # parallel version of csrmm
 #@njit(fastmath=True, nogil=True, cache=True)
-@njit(nogil=True, cache=True)
+@njit(nogil=True, cache=True, fastmath=True)
 def csrmm_sp(Xr, Xc, X, yr, yc, y, xrst, xred, cpu=1):
 
     xr = np.empty(xred+1-xrst, Xr.dtype)
@@ -751,10 +751,10 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
         raise SystemExit()
 
     nnzs = x.size + y.size
-    if cpu <= 1 or nnzs <= 2e8:
+    if cpu <= 1 or nnzs <= 1e8:
     # shutdown threads
     #print 'try msav'
-    #if 1:
+    #if 0:
         visit = np.zeros(yr.size, 'int8')
         zr, zc, z, flag = csrmm(xr, xc, x, yr, yc, y, visit)
     else:
@@ -769,10 +769,15 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
             threads.append(t)
 
         if prefix == None:
-            tmpfn = tempfile.mktemp('tmp', dir='./tmp/')
+            #tmpfn = tempfile.mktemp('tmp', dir='./tmp/')
+            tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
         else:
             #tmpfn = tempfile.mktemp(prefix, dir=tmp_path)
             tmpfn = prefix
+
+        print 'the_tmpfn_fk', tmp_path, prefix
+
         _ozr = open(tmpfn+'_zr.npy', 'wb')
         _ozc = open(tmpfn+'_zc.npy', 'wb')
         _oz = open(tmpfn+'_z.npy', 'wb')
@@ -4993,7 +4998,7 @@ def bkmat(xyns, cpu=1):
     print 'working on block mat', xyns
     z = None
     for xyn in xyns:
-        xn, yn, shape, csr = xyn
+        xn, yn, shape, csr, tmp_path = xyn
         try:
             x = load_matrix(xn, shape=shape, csr=csr)
             if xn == yn:
@@ -5006,7 +5011,7 @@ def bkmat(xyns, cpu=1):
             #return None
             continue
 
-        z0 = csrmm_ez(x, y, cpu=1)
+        z0 = csrmm_ez(x, y, tmp_path=tmp_path, cpu=1)
         if type(z) != type(None):
             z += z0
         else:
@@ -5219,7 +5224,7 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
         #print 'xi', xi, 'yi', yi
         if os.path.isfile(xn) and os.path.isfile(yn):
             #xyn.append([xn, yn, shape, csr])
-            xyn[i % cpu].append([xn, yn, shape, csr])
+            xyn[i % cpu].append([xn, yn, shape, csr, tmp_path])
             print 'in_bkt', i, cpu, i % cpu
 
     xyn = [elem for elem in xyn if elem]
@@ -5424,6 +5429,8 @@ def element_wrapper(elems):
     outs = []
     for elem in elems:
         x, y, d, qry, shape, tmp_path, csr, I, prune, cpu, fast = elem
+
+        print 'tmp_path', tmp_path
         if fast:
             out = element_fast(x, y, d, qry, shape, tmp_path, csr, I, prune, cpu)
         else:

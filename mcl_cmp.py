@@ -13,6 +13,8 @@ for i in f:
         j = i[:-1].strip().split(' ')
 
     j.sort()
+    if len(j) < 2:
+        continue
     qry_set.add(tuple(j))
     qN += 1
 
@@ -30,6 +32,10 @@ for i in f:
 
 
     j.sort()
+    if len(j) < 2:
+        continue
+
+
     #qry_set.add(tuple(j))
     if tuple(j) in qry_set:
         sN += 1
