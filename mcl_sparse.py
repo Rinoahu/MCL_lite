@@ -3555,8 +3555,8 @@ def find_cutoff_col(elems):
 
 
 
-find_cutoff = find_cutoff_col_mg
-#find_cutoff = find_cutoff_row_mg
+#find_cutoff = find_cutoff_col_mg
+find_cutoff = find_cutoff_row_mg
 
 
 # prune
