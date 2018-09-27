@@ -3555,8 +3555,8 @@ def find_cutoff_col(elems):
 
 
 
-#find_cutoff = find_cutoff_col_mg
-find_cutoff = find_cutoff_row_mg
+find_cutoff = find_cutoff_col_mg
+#find_cutoff = find_cutoff_row_mg
 
 
 # prune
@@ -9953,7 +9953,9 @@ def mcl8(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=
 
 
 # add memory usage limit
-def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+#def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -9988,8 +9990,8 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=
     # norm
     fns, cvg, nnz = norm(qry, shape, tmp_path, csr=False, cpu=cpu)
 
-    pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
-    #pruning(qry, tmp_path, prune=prune, cpu=cpu)
+    #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+    pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
 
     # print 'finish norm', cvg
     # expension
@@ -10017,8 +10019,8 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=
             #os.system('rm %s/*.npz_old'%tmp_path)
             fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu)
 
-        pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
-        #pruning(qry, tmp_path, prune=prune, cpu=cpu)
+        #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+        pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
 
 
         if nnz < chunk / 4 and len(fns) > cpu ** 2:
@@ -10557,6 +10559,9 @@ def manual_print():
     print 'Parameters:'
     print '  -i: adjacency matrix. A tab-delimited file which contain 3, 4, 12 or 14 columns'
     print '  -I: float. inflation parameter for mcl'
+    print '  -P: float. prune parameter'
+    print '  -R: float. recover parameter'
+    print '  -S: float. select parameter'
     print '  -a: int. cpu number'
     print '  -b: int. chunk size. default value is 20000000'
     print '  -o: string. name of output file'
@@ -10570,7 +10575,7 @@ if __name__ == '__main__':
 
     argv = sys.argv
     # recommand parameter:
-    args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 't', '-g': '0', '-r': 'f', '-m': '4'}
+    args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 't', '-g': '0', '-r': 'f', '-m': '4', '-P':'1/4e3', '-S':'1100', '-R':'1400'}
 
     N = len(argv)
     for i in xrange(1, N):
@@ -10593,7 +10598,7 @@ if __name__ == '__main__':
         raise SystemExit()
 
     try:
-        qry, ifl, cpu, bch, ofn, sym, gpu, rsm, mem = args['-i'], float(eval(args['-I'])), int(eval(args['-a'])), int(eval(args['-b'])), args['-o'], args['-d'], int(eval(args['-g'])), args['-r'], float(eval(args['-m']))
+        qry, ifl, cpu, bch, ofn, sym, gpu, rsm, mem, pru, slc, rcv = args['-i'], float(eval(args['-I'])), int(eval(args['-a'])), int(eval(args['-b'])), args['-o'], args['-d'], int(eval(args['-g'])), args['-r'], float(eval(args['-m'])), float(eval(args['-P'])), int(eval(args['-S'])), int(eval(args['-R']))
         if sym.lower().startswith('f'):
             sym = False
         elif sym.lower().startswith('t'):
@@ -10636,10 +10641,10 @@ if __name__ == '__main__':
         #mcl_gpu(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, gpu=gpu, mem=mem)
         mcl_gpu(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, gpu=gpu, mem=mem)
 
-
     else:
         #mcl(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
-        mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
+        #mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
+        mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
 
         #mcl_lite(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym)
 
