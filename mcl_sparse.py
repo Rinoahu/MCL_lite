@@ -3327,9 +3327,9 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True):
                 ps[i] = rdata[S]
 
             else:
-                ps[i] = rdata[-1]
+                #ps[i] = prune
                 #print'ps_good', ps[i]
-                #continue
+                continue
         #print 'find_lower_fk', m
     return ps
 
@@ -9988,8 +9988,8 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=
     # norm
     fns, cvg, nnz = norm(qry, shape, tmp_path, csr=False, cpu=cpu)
 
-    #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
-    pruning(qry, tmp_path, prune=prune, cpu=cpu)
+    pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+    #pruning(qry, tmp_path, prune=prune, cpu=cpu)
 
     # print 'finish norm', cvg
     # expension
@@ -10017,8 +10017,8 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=
             #os.system('rm %s/*.npz_old'%tmp_path)
             fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu)
 
-        pruning(qry, tmp_path, prune=prune, cpu=cpu)
-        #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+        pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+        #pruning(qry, tmp_path, prune=prune, cpu=cpu)
 
 
         if nnz < chunk / 4 and len(fns) > cpu ** 2:
