@@ -507,7 +507,7 @@ def csrmm_msav2(xr, xc, x, yr, yc, y, visit):
 
 # parallel version of csrmm
 #@njit(fastmath=True, nogil=True, cache=True)
-@njit(nogil=True, cache=True)
+@njit(nogil=True, cache=True, fastmath=True)
 def csrmm_sp(Xr, Xc, X, yr, yc, y, xrst, xred, cpu=1):
 
     xr = np.empty(xred+1-xrst, Xr.dtype)
@@ -754,7 +754,7 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     if cpu <= 1 or nnzs <= 1e8:
     # shutdown threads
     #print 'try msav'
-    #if 1:
+    #if 0:
         visit = np.zeros(yr.size, 'int8')
         zr, zc, z, flag = csrmm(xr, xc, x, yr, yc, y, visit)
     else:
@@ -769,10 +769,15 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
             threads.append(t)
 
         if prefix == None:
-            tmpfn = tempfile.mktemp('tmp', dir='./tmp/')
+            #tmpfn = tempfile.mktemp('tmp', dir='./tmp/')
+            tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
         else:
             #tmpfn = tempfile.mktemp(prefix, dir=tmp_path)
             tmpfn = prefix
+
+        print 'the_tmpfn_fk', tmp_path, prefix
+
         _ozr = open(tmpfn+'_zr.npy', 'wb')
         _ozc = open(tmpfn+'_zc.npy', 'wb')
         _oz = open(tmpfn+'_z.npy', 'wb')
@@ -799,7 +804,7 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
             zc = np.memmap(tmpfn+'_zc.npy', dtype=xc.dtype)
             z = np.memmap(tmpfn+'_z.npy', dtype=x.dtype)
             zr, zc, z = map(np.array, [zr, zc, z])
-            os.system('rm %s_z*.npy'%tmpfn)
+            os.system('rm -f %s_z*.npy'%tmpfn)
         except:
             zr = zc = z = None
 
@@ -3000,12 +3005,14 @@ def csrsort(x):
     #x_s = sparse.csr_matrix((c, a, b), shape=x.shape, dtype=x.dtype)
     #return x_s
 
+
 @njit(cache=True)
-def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
+def csrmg_jit0(a0, b0, c0, a1, b1, c1, S=1):
     #a0, b0, c0 = x0.indices, x0.indptr, x0.data
     #a1, b1, c1 = x1.indices, x1.indptr, x1.data
     #row_min = np.empty(b0.size, c0.dtype)
     assert b0.size == b1.size
+    print 'csrmg_jit_size_fk', len(a0), len(b0), len(c0), len(a1), len(b1), len(c1), S
     n = b0.size
     #nnz = min(a0.size + a1.size, b0.size*S)
     nnz = a0.size + a1.size
@@ -3017,7 +3024,8 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
         st1, ed1 = b1[i:i+2]
         p0, p1 = st0, st1
         flag = 0
-
+        if st1 < ed1:
+            print 'csrmg_jit_st_ed_fk', p0, st0, ed0, p1, st1, ed1, flag, S, '|', len(b1), b1.max(), c1[:20]
         while p0 < ed0 and p1 < ed1 and flag < S:
             if c0[p0] >= c1[p1]:
                 c2[ptr] = c0[p0]
@@ -3031,14 +3039,150 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
             ptr += 1
             flag += 1
 
+        if flag > 0:
+            print 'csrmg_jit_fk', flag
         #row_min[i] = a2[ptr-1]
         b2[i+1] = ptr
 
+    #print 'csrmge_jit_ptr_fk', ptr
     a2 = a2[:ptr]
     c2 = c2[:ptr]
     #z = sparse.csr_matrix((c2, a2, b2), shape=x0.shape, dtype=x0.dtype)
     #return z
     return a2, b2, c2
+
+
+@njit(cache=True)
+def csrmg_jit1(a0, b0, c0, a1, b1, c1, S=1):
+    #a0, b0, c0 = x0.indices, x0.indptr, x0.data
+    #a1, b1, c1 = x1.indices, x1.indptr, x1.data
+    #row_min = np.empty(b0.size, c0.dtype)
+    assert b0.size == b1.size
+    print 'csrmg_jit_size_fk', len(a0), len(b0), len(c0), len(a1), len(b1), len(c1), S
+    n = b0.size
+    #nnz = min(a0.size + a1.size, b0.size*S)
+    nnz = a0.size + a1.size
+    a2, b2, c2 = np.empty(nnz, a0.dtype), np.empty(n, b0.dtype), np.empty(nnz, c0.dtype)
+    b2[0] = 0
+    ptr = 0
+    for i in xrange(n-1):
+        st0, ed0 = b0[i:i+2]
+        st1, ed1 = b1[i:i+2]
+        p0, p1 = st0, st1
+        flag = 0
+        if st0 < ed0 and st1 == ed1:
+            c0_rg = c0[st0: ed0][:S]
+            a0_rg = a0[st0: ed0][:S]
+            flag = c0_rg.size
+            c2[ptr:ptr+flag] = c0_rg
+            a2[ptr:ptr+flag] = a0_rg
+            ptr += flag
+
+        elif st0 == ed0 and st1 < ed1:
+            c1_rg = c1[st0: ed0][:S]
+            a1_rg = a1[st0: ed0][:S]
+            flag = c1_rg.size
+            c2[ptr:ptr+flag] = c1_rg
+            a2[ptr:ptr+flag] = a1_rg
+            ptr += flag
+
+        else:
+            while p0 < ed0 and p1 < ed1 and flag < S:
+                if c0[p0] >= c1[p1]:
+                    c2[ptr] = c0[p0]
+                    a2[ptr] = a0[p0]
+                    p0 += 1
+                else:
+                    c2[ptr] = c1[p1]
+                    a2[ptr] = a1[p1]
+                    p1 += 1
+
+                ptr += 1
+                flag += 1
+
+        #if flag > 0:
+        #    print 'csrmg_jit_fk', flag
+        #row_min[i] = a2[ptr-1]
+        b2[i+1] = ptr
+
+    #print 'csrmge_jit_ptr_fk', ptr
+    a2 = a2[:ptr]
+    c2 = c2[:ptr]
+    #z = sparse.csr_matrix((c2, a2, b2), shape=x0.shape, dtype=x0.dtype)
+    #return z
+    return a2, b2, c2
+
+
+
+@njit(cache=True)
+def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
+    #a0, b0, c0 = x0.indices, x0.indptr, x0.data
+    #a1, b1, c1 = x1.indices, x1.indptr, x1.data
+    #row_min = np.empty(b0.size, c0.dtype)
+    assert b0.size == b1.size
+    print 'csrmg_jit_size_fk', len(a0), len(b0), len(c0), len(a1), len(b1), len(c1), S
+    n = b0.size
+    #nnz = min(a0.size + a1.size, b0.size*S)
+    nnz = a0.size + a1.size
+    a2, b2, c2 = np.empty(nnz, a0.dtype), np.empty(n, b0.dtype), np.empty(nnz, c0.dtype)
+    b2[0] = 0
+    ptr = 0
+    for i in xrange(n-1):
+        st0, ed0 = b0[i:i+2]
+        st1, ed1 = b1[i:i+2]
+        p0, p1 = st0, st1
+        #if flag > 0:
+        #    print 'csrmg_jit_fk', flag
+        #row_min[i] = a2[ptr-1]
+        ptr_mg = 0
+        ln_mg = ed0 - st0 + ed1 - st1
+        c_mg = np.empty(ln_mg, c0.dtype)
+        a_mg = np.empty(ln_mg, a0.dtype)
+        while p0 < ed0 and p1 < ed1:
+            if c0[p0] >= c1[p1]:
+                c_mg[ptr_mg] = c0[p0]
+                a_mg[ptr_mg] = a0[p0]
+                p0 += 1
+            else:
+                c_mg[ptr_mg] = c1[p1]
+                a_mg[ptr_mg] = a1[p1]
+                p1 += 1
+            ptr_mg += 1
+
+        #print 'csrmg_jit_while_fk', ln_mg, ptr_mg, p0, ed0, p1, ed1
+
+        if p0 < ed0 and p1 >= ed1:
+            c_mg[ptr_mg:] = c0[p0: ed0]
+            a_mg[ptr_mg:] = a0[p0: ed0]
+
+        elif p0 >= ed0 and p1 < ed1:
+            c_mg[ptr_mg:] = c1[p1: ed1]
+            a_mg[ptr_mg:] = a1[p1: ed1]
+        else:
+            pass
+
+        #print 'csrmg_jit_while_fk_end', ln_mg, ptr_mg, p0, ed0, p1, ed1
+
+
+        c_mg_S = c_mg[:S]
+        a_mg_S = a_mg[:S]
+        flag = c_mg_S.size
+        c2[ptr:ptr+flag] = c_mg_S
+        a2[ptr:ptr+flag] = a_mg_S
+        ptr += flag
+
+
+        b2[i+1] = ptr
+
+    #print 'csrmge_jit_ptr_fk', ptr
+    a2 = a2[:ptr]
+    c2 = c2[:ptr]
+    #z = sparse.csr_matrix((c2, a2, b2), shape=x0.shape, dtype=x0.dtype)
+    #return z
+    return a2, b2, c2
+
+
+
 
 
 #def csrmerge(x0, x1, S=1400):
@@ -3050,7 +3194,7 @@ def csrmerge(x0, x1, prune=1/4e3, S=1100, R=1400):
     #a2, b2, c2 = csrmg_jit(a0, b0, c0, a1, b1, c1, S)
     a2, b2, c2 = csrmg_jit(a0, b0, c0, a1, b1, c1, thr)
     z = sparse.csr_matrix((c2, a2, b2), shape=x0.shape, dtype=x0.dtype)
-    print 'after_csr_merge', z.nnz
+    print 'after_csr_merge', len(a0), len(b0), len(c0),  np.diff(b0).max(), '|', len(a1), len(b1), len(c1), np.diff(b0).max(), '|', len(a2), len(b2), len(c2), '|', z.nnz, 1./prune, thr, S, R, np.diff(z.indptr).max()
     return z
 
 
@@ -3073,7 +3217,7 @@ def find_lower0(indptr, data, prune=1e-4, R=300):
 
 
 @njit(cache=True)
-def find_lower(indptr, data, prune=1./4000, S=1100, R=1400):
+def find_lower1(indptr, data, prune=1/4e3, S=1100, R=1400):
     n = indptr.size
     ps = np.empty(n, data.dtype)
     #S = max(1./prune, R, S)
@@ -3091,13 +3235,13 @@ def find_lower(indptr, data, prune=1./4000, S=1100, R=1400):
             j = idx.sum()
             if j <= R:
                 idx_s = row.argsort()
-                idx_m = idx_s[m-R]
+                idx_m = idx_s[-R]
                 ps[i] = row[idx_m]
                 #print'ps_less_2', ps[i]
 
             elif j > S > R:
                 idx_s = row.argsort()
-                idx_m = idx_s[m-S]
+                idx_m = idx_s[-S]
                 ps[i] = row[idx_m]
                 #print'ps_more', ps[i]
 
@@ -3106,6 +3250,91 @@ def find_lower(indptr, data, prune=1./4000, S=1100, R=1400):
                 #print'ps_good', ps[i]
 
     return ps
+
+
+
+@njit(cache=True)
+def find_lower2(indptr, data, prune=1/4e3, S=1100, R=1400):
+    n = indptr.size
+    ps = np.empty(n, data.dtype)
+    #S = max(1./prune, R, S)
+    for i in xrange(n-1):
+        st, ed = indptr[i:i+2]
+        m = ed - st
+        if m <= R:
+            row = data[st:ed]
+            ps[i] = 0
+            continue
+            #print'ps_less', ps[i]
+        else:
+            row = data[st:ed]
+            idx = row > prune
+            j = idx.sum()
+            if j <= R:
+                idx_s = row.argsort()
+                #idx_m = idx_s[m-R]
+                idx_m = idx_s[-R]
+                ps[i] = row[idx_m]
+                #print'ps_less_2', ps[i]
+
+            elif j > S > R and S <= m:
+                idx_s = row.argsort()
+                #idx_m = idx_s[m-S]
+                idx_m = idx_s[-S]
+                ps[i] = row[idx_m]
+                #print'ps_more', ps[i]
+
+            else:
+                ps[i] = prune
+                #print'ps_good', ps[i]
+
+    return ps
+
+
+
+@njit(cache=True)
+def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True):
+    n = indptr.size
+    ps = np.empty(n, data.dtype)
+    ps[:] = prune
+    #ps = np.zeros(n, data.dtype)
+    for i in xrange(n-1):
+        st, ed = indptr[i:i+2]
+        rdata = data[st:ed]
+        m = ed - st
+        if m <= R:
+            #row = data[st:ed]
+            ps[i] = rdata[-1] 
+            #continue
+            #print'ps_less', ps[i], i, m, R, rdata[0], rdata[-1], rdata[:10]
+        else:
+            idx = rdata > prune
+            j = idx.sum()
+            if j < R < m:
+                #idx_s = row.argsort()
+                #idx_m = idx_s[m-R]
+                #idx_m = idx_s[-R]
+                #ps[i] = row[idx_m]
+                #print'ps_less_2', ps[i]
+                ps[i] = rdata[R]
+
+            elif j > S > R and S < m:
+                #idx_s = row.argsort()
+                #idx_m = idx_s[m-S]
+                #idx_m = idx_s[-S]
+                #ps[i] = row[idx_m]
+                #print'ps_more', ps[i]
+                ps[i] = rdata[S]
+
+            else:
+                #ps[i] = prune
+                #print'ps_good', ps[i]
+                continue
+        #print 'find_lower_fk', m
+    return ps
+
+
+
 
 
 # remove element by give threshold
@@ -3121,10 +3350,11 @@ def rm_elem(indptr, data, prune):
 
         #print (row<p).sum(), row.size
 
-    print 'after_prune_rm', (data>0).sum()
+    print 'after_prune_rm', (data>0).sum(), (prune>0).sum()
 
 
-def find_cutoff(elems):
+# find the threshold of prune by row
+def find_cutoff_row_mg(elems):
     if len(elems) <= 0:
         return []
     x0 = None
@@ -3146,7 +3376,9 @@ def find_cutoff(elems):
             #x0 = csrmerge(x0, x1, S)
             x0 = csrmerge(x0, x1, p, S, R)
 
-    print 'max_diff', np.diff(x0.indptr).max()
+
+
+    print 'max_diff', np.diff(x0.indptr).max(), x0.nnz, x0.indptr
     ps = find_lower(x0.indptr, x0.data, prune=p, S=S, R=R)
 
     # prune
@@ -3163,6 +3395,169 @@ def find_cutoff(elems):
 
         x1.eliminate_zeros()
         sparse.save_npz(fn, x1)
+
+
+def find_cutoff_row(elems):
+    if len(elems) <= 0:
+        return []
+    x0 = None
+    for elem in elems:
+        a, b, tmp_path, p, S, R = elem
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn)
+        except:
+            continue
+
+        # sort x1
+        #csrsort(x1)
+        #print 'csrsorting'
+        # merge with x0
+        if type(x0) == type(None):
+            x0 = x1
+        else:
+            #x0 = csrmerge(x0, x1, S)
+            #x0 = csrmerge(x0, x1, p, S, R)
+            x0 += x1
+
+    csrsort(x0)
+
+    print 'max_diff', np.diff(x0.indptr).max(), x0.nnz, x0.indptr
+    ps = find_lower(x0.indptr, x0.data, prune=p, S=S, R=R)
+
+    # prune
+    for elem in elems:
+        a, b, tmp_path, p, S, R = elem
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn)
+        except:
+            continue
+        # remove small element
+        print 'before_before_prune', x1.nnz
+        rm_elem(x1.indptr, x1.data, ps)
+
+        x1.eliminate_zeros()
+        sparse.save_npz(fn, x1)
+
+
+
+
+# find threshold of prune by col
+def find_cutoff_col_mg(elems):
+    if len(elems) <= 0:
+        return []
+    x0 = None
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        b, a = a, b
+        print 'cutoff_ab_fk', a, b, elems
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn).T
+        except:
+            print 'max_fn', fn
+
+            continue
+
+        # sort x1
+        csrsort(x1)
+        print 'csrsorting', x1.nnz
+        # merge with x0
+        if type(x0) == type(None):
+            x0 = x1
+        else:
+            #x0 = csrmerge(x0, x1, S)
+            print 'csrmerge_fk', 1./P, S, R
+            x0 = csrmerge(x0, x1, P, S, R)
+
+    x0.eliminate_zeros()
+    print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
+    ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
+
+    # prune
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        b, a = a, b
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn).T
+        except:
+            continue
+        # remove small element
+        print 'before_before_prune', x1.nnz, 'before_max_row', np.diff(x1.indptr).max(), 1./P, S, R
+        rm_elem(x1.indptr, x1.data, ps)
+
+        x1.eliminate_zeros()
+
+        tmp = np.diff(x1.indptr)
+        tmp_index = np.where(tmp==tmp.max())[0][0]
+
+        print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
+
+        sparse.save_npz(fn, x1.T)
+
+
+def find_cutoff_col(elems):
+    if len(elems) <= 0:
+        return []
+    x0 = None
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        b, a = a, b
+        print 'cutoff_ab_fk', a, b, elems
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn).T
+        except:
+            print 'max_fn', fn
+
+            continue
+
+        # sort x1
+        #csrsort(x1)
+        #print 'csrsorting', x1.nnz
+        # merge with x0
+        if type(x0) == type(None):
+            x0 = x1
+        else:
+            #x0 = csrmerge(x0, x1, S)
+            #print 'csrmerge_fk', 1./P, S, R
+            #x0 = csrmerge(x0, x1, P, S, R)
+            x0 += x1
+
+    csrsort(x0)
+    x0.eliminate_zeros()
+    print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
+    ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
+
+    # prune
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        b, a = a, b
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn).T
+        except:
+            continue
+        # remove small element
+        print 'before_before_prune', x1.nnz, 'before_max_row', np.diff(x1.indptr).max(), 1./P, S, R
+        rm_elem(x1.indptr, x1.data, ps)
+
+        x1.eliminate_zeros()
+
+        tmp = np.diff(x1.indptr)
+        tmp_index = np.where(tmp==tmp.max())[0][0]
+
+        print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
+
+        sparse.save_npz(fn, x1.T)
+
+
+
+#find_cutoff = find_cutoff_col_mg
+find_cutoff = find_cutoff_row_mg
+
 
 # prune
 def pruning(qry, tmp_path=None, prune=1/4e3, S=1100, R=1400, cpu=1):
@@ -4833,7 +5228,7 @@ def element4(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.
 
 
 
-def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-6, cpu=1):
+def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e3, cpu=1):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -4903,7 +5298,7 @@ def bkmat(xyns, cpu=1):
     print 'working on block mat', xyns
     z = None
     for xyn in xyns:
-        xn, yn, shape, csr = xyn
+        xn, yn, shape, csr, tmp_path = xyn
         try:
             x = load_matrix(xn, shape=shape, csr=csr)
             if xn == yn:
@@ -4916,7 +5311,7 @@ def bkmat(xyns, cpu=1):
             #return None
             continue
 
-        z0 = csrmm_ez(x, y, cpu=1)
+        z0 = csrmm_ez(x, y, tmp_path=tmp_path, cpu=1)
         if type(z) != type(None):
             z += z0
         else:
@@ -5117,7 +5512,7 @@ def bmerge_disk(zs, cpu=1):
 
 
 # processing entry blocks one by one
-def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-6, cpu=1):
+def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e3, cpu=1):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -5129,7 +5524,7 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
         #print 'xi', xi, 'yi', yi
         if os.path.isfile(xn) and os.path.isfile(yn):
             #xyn.append([xn, yn, shape, csr])
-            xyn[i % cpu].append([xn, yn, shape, csr])
+            xyn[i % cpu].append([xn, yn, shape, csr, tmp_path])
             print 'in_bkt', i, cpu, i % cpu
 
     xyn = [elem for elem in xyn if elem]
@@ -5247,7 +5642,7 @@ def element_gpu0(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
     return row_sum_n, xyn, nnz
 
 
-def element_gpu(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-6):
+def element_gpu(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e3):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -5334,6 +5729,8 @@ def element_wrapper(elems):
     outs = []
     for elem in elems:
         x, y, d, qry, shape, tmp_path, csr, I, prune, cpu, fast = elem
+
+        print 'tmp_path', tmp_path
         if fast:
             out = element_fast(x, y, d, qry, shape, tmp_path, csr, I, prune, cpu)
         else:
@@ -6498,7 +6895,7 @@ def element_wrapper_gpu(elems):
         # remove element < prune
         row_sum = np.asarray(z.sum(0), 'float32')[0]
         norm_dat = z.data / row_sum.take(z.indices, mode='clip')
-        z.data[norm_dat < prune] = 0 
+        #z.data[norm_dat < prune] = 0 
         z.eliminate_zeros()
        
 
@@ -7110,7 +7507,7 @@ def expand10(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e
 
 
 
-def expand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1e-6, cpu=1, fast=False):
+def expand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e3, cpu=1, fast=False):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -7998,6 +8395,59 @@ def sdiv4(parameters, row_sum=None, dtype='float32'):
         return float('+inf')
 
 # remove pruning operation
+def sdiv5(parameters, row_sum=None, dtype='float32'):
+    fn, shape, csr, check, rtol, tmp_path, prune = parameters
+    if type(row_sum) == type(None):
+        row_sum = np.asarray(np.memmap(tmp_path+'/row_sum_total.npy', mode='r', dtype='float32'))
+
+    err = None
+    try:
+        x = load_matrix(fn, shape=shape, csr=csr)
+        x.data /= row_sum.take(x.indices, mode='clip')
+        # convert entries to 16 bit float
+        #x.data = np.asarray(x.data, dtype=dtype)
+        print 'norm before nnz', x.nnz, fn
+        #x.data[x.data < prune] = 0
+        x.eliminate_zeros()
+        print 'norm after nnz', x.nnz, fn
+
+        sparse.save_npz(fn + '_new', x)
+        os.system('mv %s_new.npz %s' % (fn, fn))
+        if check:
+            try:
+                x_old = load_matrix(fn + '_old', shape=shape, csr=csr)
+            except:
+                x_old = None
+            # print 'start norm4 x x_old', abs(x - x_old).shape
+
+            if type(x) != type(None) and type(x_old) != type(None):
+                gap = abs(x - x_old) - abs(rtol * x_old)
+                err = max(err, gap.max())
+            elif type(x) != type(None) and type(x_old) == type(None):
+                gap = abs(x)
+                err = max(err, gap.max())
+            elif type(x) == type(None) and type(x_old) != type(None):
+                gap = abs(x_old) - abs(rtol * x_old)
+                err = max(err, gap.max())
+            else:
+                err = 0
+
+            del x_old
+            gc.collect()
+
+        del x
+        gc.collect()
+
+    except:
+        pass
+
+    if check and err != None:
+        return err
+    else:
+        return float('+inf')
+
+
+# correct sdiv
 def sdiv(parameters, row_sum=None, dtype='float32'):
     fn, shape, csr, check, rtol, tmp_path, prune = parameters
     if type(row_sum) == type(None):
@@ -8007,6 +8457,14 @@ def sdiv(parameters, row_sum=None, dtype='float32'):
     try:
         x = load_matrix(fn, shape=shape, csr=csr)
         x.data /= row_sum.take(x.indices, mode='clip')
+        #xt = load_matrix(fn, shape=shape, csr=csr).T
+        #xt.data /= row_sum.take(xt.indices, mode='clip')
+        #x = xt.T
+        #del xt
+        #gc.collect()
+
+
+
         # convert entries to 16 bit float
         #x.data = np.asarray(x.data, dtype=dtype)
         print 'norm before nnz', x.nnz, fn
@@ -8171,6 +8629,9 @@ def sdiv_gpu(parameters, row_sum=None, dtype='float32'):
         print 'sdiv_gpu load x', x.shape, 'row sum', rs_part.shape
 
         x.data /= rs_part.take(x.indices, mode='clip')
+        #xt = x.T
+        #xt.data /= rs_part.take(x.indices, mode='clip')
+        #x = xt.T
 
 
         # convert entries to 16 bit float
@@ -8370,7 +8831,7 @@ def norm7(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rto
 
 
 # remove element < prune
-def norm(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rtol=1e-5, atol=1e-8, check=False, cpu=1, prune=None):
+def norm8(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rtol=1e-5, atol=1e-8, check=False, cpu=1, prune=None):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -8449,13 +8910,95 @@ def norm(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rtol
 
 
 
-# normal function for gpu 
-def norm_gpu(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rtol=1e-5, atol=1e-8, check=False, cpu=1, prune=None):
+# correct row sum
+def norm(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rtol=1e-5, atol=1e-8, check=False, cpu=1, prune=None):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
     if prune == None:
-        prune = .05 / shape[0]
+        #prune = .05 / shape[0]
+        prune = 1/4e3
+
+    Ns = [elem.split('.')[0].split('_') for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
+    N = max([max(map(int, elem)) for elem in Ns]) + 1
+    d = N
+    fns = []
+    for i in xrange(d):
+        for j in xrange(d):
+            fn = tmp_path + '/' + str(i) + '_' + str(j) + '.npz'
+            fns.append(fn)
+
+    nnz = 0
+    #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
+
+    if isinstance(row_sum, type(None)):
+        row_sum = np.zeros(shape[0], dtype='float32')
+        for i in fns:
+            try:
+                x = load_matrix(i, shape=shape, csr=csr)
+                nnz = max(nnz, x.nnz)
+                y = np.asarray(x.sum(0))[0]
+                #y = np.asarray(x.sum(1).T)[0]
+                row_sum += y
+                del x
+                del y
+                gc.collect()
+            except:
+                continue
+    #print 'norm nnz is', nnz, i, fns
+    # write row sum to disk
+    fp = np.memmap(tmp_path+'/row_sum_total.npy', mode='w+', dtype='float32', shape=row_sum.shape)
+    fp[:] = row_sum
+    fp.flush()
+    fp._mmap.close()
+    # normalize
+    #xys = [[elem, shape, csr, check, rtol, tmp_path] for elem in fns]
+    xys = [[] for elem in xrange(cpu)]
+    flag = 0
+    for elem in fns:
+        #elem = fns[i]
+        xy = [elem, shape, csr, check, rtol, tmp_path, prune] 
+        xys[flag%cpu].append(xy)
+        flag += 1
+
+
+    if cpu <= 1:
+        print 'norm cpu < 1', cpu, len(xys)
+        errs = map(sdiv_wrapper, xys)
+    else:
+        print 'norm cpu > 1', cpu, len(xys)
+        errs = Parallel(n_jobs=cpu)(delayed(sdiv_wrapper)(elem) for elem in xys)
+        #pool = mp.Pool(cpu)
+        #errs = pool.map(sdiv_wrapper, xys)
+        #pool.terminate()
+        #pool.close()
+        #del pool
+        #gc.collect()
+
+    gc.collect()
+
+    if check:
+        #err = max(errs)
+        err = 0
+        for i in errs:
+            for j in i:
+                err = max(err, j)
+
+        cvg = err < atol and True or False
+    else:
+        cvg = False
+
+    return fns, cvg, nnz
+
+
+
+# normal function for gpu 
+def norm_gpu0(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rtol=1e-5, atol=1e-8, check=False, cpu=1, prune=None):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    if prune == None:
+        prune = 1/4e3
 
 
     block = shape[0]
@@ -8535,6 +9078,94 @@ def norm_gpu(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, 
 
     return fns, cvg, nnz
 
+
+# correct row sum
+def norm_gpu(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rtol=1e-5, atol=1e-8, check=False, cpu=1, prune=None):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    if prune == None:
+        prune = .05 / shape[0]
+
+
+    block = shape[0]
+    Ns = [elem.split('.')[0].split('_') for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
+    N = max([max(map(int, elem)) for elem in Ns]) + 1
+    d = N
+    fns = []
+    for i in xrange(d):
+        for j in xrange(d):
+            fn = tmp_path + '/' + str(i) + '_' + str(j) + '.npz'
+            fns.append(fn)
+
+    nnz = 0
+    #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
+    if isinstance(row_sum, type(None)):
+        #row_sum = np.zeros(shape[0], dtype='float32')
+        row_sum = np.zeros(block * N, dtype='float32')
+        for i in fns:
+            j = int(i.split('_')[-1].split('.npz')[0])
+            try:
+                x = load_matrix(i, shape=shape, csr=csr)
+                nnz = max(nnz, x.nnz)
+                y = np.asarray(x.sum(0))[0]
+                #y = np.asarray(x.sum(1).T)[0]
+
+                start = j * block
+                end = start + block
+                row_sum[start: end] += y
+                del x
+                del y
+                gc.collect()
+                print 'get rowsum'
+            except:
+                print 'can\'t get rowsum'
+                continue
+    #print 'norm nnz is', nnz, i, fns
+    # write row sum to disk
+    fp = np.memmap(tmp_path+'/row_sum_total.npy', mode='w+', dtype='float32', shape=row_sum.shape)
+    fp[:] = row_sum
+    fp.flush()
+    fp._mmap.close()
+    # normalize
+    #xys = [[elem, shape, csr, check, rtol, tmp_path] for elem in fns]
+    xys = [[] for elem in xrange(cpu)]
+    flag = 0
+    for elem in fns:
+        #elem = fns[i]
+        xy = [elem, shape, csr, check, rtol, tmp_path, prune] 
+        xys[flag%cpu].append(xy)
+        flag += 1
+
+
+    if cpu <= 1 or len(xys) <= 1:
+        print 'norm cpu < 1', cpu, len(xys)
+        errs = map(sdiv_wrapper_gpu, xys)
+    else:
+        print 'norm cpu > 1', cpu, len(xys)
+        #errs = Parallel(n_jobs=cpu)(delayed(sdiv_wrapper)(elem) for elem in xys)
+        errs = Parallel(n_jobs=cpu)(delayed(sdiv_wrapper_gpu)(elem) for elem in xys)
+        #pool = mp.Pool(cpu)
+        #errs = pool.map(sdiv_wrapper_gpu, xys)
+        #pool.terminate()
+        #pool.close()
+        #del pool
+        #gc.collect()
+
+    gc.collect()
+
+    if check:
+        #err = max(errs)
+        err = 0
+        for i in errs:
+            for j in i:
+                err = max(err, j)
+
+        cvg = err < atol and True or False
+    else:
+        cvg = False
+
+    return fns, cvg, nnz
 
 
 
@@ -9322,14 +9953,17 @@ def mcl8(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=
 
 
 # add memory usage limit
-def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1./4000, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+#def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
     if rsm == False:
-        os.system('rm -rf %s' % tmp_path)
+        os.system('mkdir -p %s' % tmp_path)
+        os.system('rm -rf %s/*' % tmp_path)
 
-        q2n, block = mat_split(qry, chunk=chunk, cpu=cpu, sym=sym, mem=mem)
+        q2n, block = mat_split(qry, tmp_path=tmp_path, chunk=chunk, cpu=cpu, sym=sym, mem=mem)
 
         N = len(q2n)
 
@@ -9355,7 +9989,10 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1./4000, itr=100, rtol=1e-5, ato
     #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=False, block=block, cpu=cpu)
     # norm
     fns, cvg, nnz = norm(qry, shape, tmp_path, csr=False, cpu=cpu)
-    pruning(qry, tmp_path, prune=prune, cpu=cpu)
+
+    #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+    pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
+
     # print 'finish norm', cvg
     # expension
     for i in xrange(itr):
@@ -9382,7 +10019,10 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1./4000, itr=100, rtol=1e-5, ato
             #os.system('rm %s/*.npz_old'%tmp_path)
             fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu)
 
-        pruning(qry, tmp_path, cpu=cpu)
+        #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+        pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
+
+
         if nnz < chunk / 4 and len(fns) > cpu ** 2:
         #if nnz < chunk / 4 or nnz <= N:
             print 'we try to merge 4 block into one', nnz, chunk/4
@@ -9919,10 +10559,13 @@ def manual_print():
     print 'Parameters:'
     print '  -i: adjacency matrix. A tab-delimited file which contain 3, 4, 12 or 14 columns'
     print '  -I: float. inflation parameter for mcl'
+    print '  -P: float. prune parameter'
+    print '  -R: float. recover parameter'
+    print '  -S: float. select parameter'
     print '  -a: int. cpu number'
     print '  -b: int. chunk size. default value is 20000000'
     print '  -o: string. name of output file'
-    print '  -d: T|F. is the graph directed? Default is False'
+    print '  -d: T|F. is the graph directed? Default is True'
     print '  -g: int. how many gpus to use for speedup. Default is 0'
     print '  -r: T|F. resume the work. Default is F'
     print '  -m: int. memory usage limitation. Deaault is 4GB'
@@ -9932,7 +10575,7 @@ if __name__ == '__main__':
 
     argv = sys.argv
     # recommand parameter:
-    args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 't', '-g': '0', '-r': 'f', '-m': '4'}
+    args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 't', '-g': '0', '-r': 'f', '-m': '4', '-P':'1/4e3', '-S':'1100', '-R':'1400'}
 
     N = len(argv)
     for i in xrange(1, N):
@@ -9955,7 +10598,7 @@ if __name__ == '__main__':
         raise SystemExit()
 
     try:
-        qry, ifl, cpu, bch, ofn, sym, gpu, rsm, mem = args['-i'], float(eval(args['-I'])), int(eval(args['-a'])), int(eval(args['-b'])), args['-o'], args['-d'], int(eval(args['-g'])), args['-r'], float(eval(args['-m']))
+        qry, ifl, cpu, bch, ofn, sym, gpu, rsm, mem, pru, slc, rcv = args['-i'], float(eval(args['-I'])), int(eval(args['-a'])), int(eval(args['-b'])), args['-o'], args['-d'], int(eval(args['-g'])), args['-r'], float(eval(args['-m'])), float(eval(args['-P'])), int(eval(args['-S'])), int(eval(args['-R']))
         if sym.lower().startswith('f'):
             sym = False
         elif sym.lower().startswith('t'):
@@ -9991,10 +10634,18 @@ if __name__ == '__main__':
 
     #if has_gpu and gpu > 0 and device > 0:
     #if has_gpu and gpu > 0:
+    tmp_dir = os.getcwd() + '/' + ofn.split(os.sep)[-1].split(os.sep)[0] + '_tmpdir'
+    os.system('mkdir %s'%tmp_dir)
+
     if gpu > 0:
-        mcl_gpu(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, gpu=gpu, mem=mem)
+        #mcl_gpu(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, gpu=gpu, mem=mem)
+        mcl_gpu(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, gpu=gpu, mem=mem)
+
     else:
-        mcl(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
+        #mcl(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
+        #mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
+        mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
+
         #mcl_lite(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym)
 
     # preprocess(qry)
