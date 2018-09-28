@@ -52,6 +52,36 @@ except:
     njit = jit = lambda x: x
 
 
+
+# sparse load and save function which avoid 2GB limit
+def sparse_save_npz(fn, x):
+    name = fn.endswith('.npz') and fn or fn + '.npz'
+    R, C, D = x.indptr, x.indices, x.data
+	N0 = C.size
+	N1 = N0 + D.size
+	N2 = N1 + R.size
+	N = N2 + 3
+    fp = np.memmap(fn, mode='w+', shape=N, dtype='float32')
+	fp[:N0] = C
+	fp[N0: N1] = D
+	fp[N1: N2] = R
+	fp[N2: N] = [N0, N1, N2]
+	fp.flush()
+
+
+def sparse_load_npz(fn):
+    fp = np.memmap(fn, mode='r+', dtype='int32')
+	N0, N1, N2 = map(int, fp[-3: ])
+	C = fp[:N0]	
+	D = fp[N0: N1]
+	R = fp[N1: N2]
+
+    z = csr_matrix((D, C, R))
+    return z
+
+
+
+
 # the sparse matrix add matrix on gpu
 if has_gpu:
 #if 1:
@@ -98,43 +128,6 @@ else:
 
     def csrgeam_ez(x, y, clf=None):
         return x+y
-
-
-
-# sparse load and save function which avoid 2GB limit
-def sparse_load_npz(fn, x):
-    R, C, D = x.indptr, x.indices, x.data
-    name = fn.endswith('.npz') and fn or fn + '.npz'
-    fpr = np.memmap(fn+'_R', mode='w+', shape=R.size, dtype='int32')
-    fpc = np.memmap(fn+'_C', mode='w+', shape=C.size, dtype='int32')
-    fpd = np.memmap(fn+'_D', mode='w+', shape=D.size, dtype='float32')
-
-
-def sparse_load_npz(fn):
-    #name = fn.endswith('.npz') and fn or fn + '.npz'
-    R = np.memmap(fn+'_R', mode='r+', dtype='int32')
-    C = np.memmap(fn+'_C', mode='r+', dtype='int32')
-    D = np.memmap(fn+'_D', mode='r+', dtype='float32')
-    z = csr_matrix((D, C, R))
-    return z
-
-
-def rename(i, mode='n2c'):
-    if mode == 'n2c':
-        os.system('mv %s_new.npz_R %s_R && mv %s_new.npz_C %s_C && mv %s_new.npz_D %s_D' % (i, i, i, i, i, i))
-
-    elif mode == 'n2o':
-        os.system('mv %s_R %s_old_R && mv %s_C %s_old_C && mv %s_D %s_old_D' % (i, i, i, i, i, i))
-
-    elif mode == 'c2o':
-        os.system('mv %s_R %s_old_R && mv %s_C %s_old_C && mv %s_D %s_old_D' % (i, i, i, i, i, i))
-
-    else:
-        pass
-
-def rmname(i):
-    os.system('rm %s_new.npz_R %s_new.npz_C %s_new.npz_D ' % (i, i, i))
-
 
 
 
@@ -2959,8 +2952,7 @@ def load_matrix(qry, shape=(10**8, 10**8), csr=False):
         # print 'loading shape is', shape, qry, x.shape
 
     else:
-        #x = sparse.load_npz(qry)
-        x = sparse_load_npz(qry)
+        x = sparse.load_npz(qry)
         # print 'loading shape is', shape, qry, x.shape
 
     return x
@@ -2972,8 +2964,7 @@ def load_matrix_gpu(qry, shape=(10**8, 10**8), csr=False):
     if csr == False:
         return None
     else:
-        #x = sparse.load_npz(qry)
-        x = sparse_load_npz(qry)
+        x = sparse.load_npz(qry)
         block = x.shape[0]
         ij = qry.split(os.sep)[-1].split('.npz')[0].split('_')[:2]
         i, j = map(int, ij)
@@ -3401,9 +3392,7 @@ def find_cutoff_row_mg(elems):
         a, b, tmp_path, p, S, R = elem
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            #x1 = sparse.load_npz(fn)
-            x1 = sparse_load_npz(fn)
-
+            x1 = sparse.load_npz(fn)
         except:
             continue
 
@@ -3427,9 +3416,7 @@ def find_cutoff_row_mg(elems):
         a, b, tmp_path, p, S, R = elem
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            #x1 = sparse.load_npz(fn)
-            x1 = sparse_load_npz(fn)
-
+            x1 = sparse.load_npz(fn)
         except:
             continue
         # remove small element
@@ -3437,8 +3424,7 @@ def find_cutoff_row_mg(elems):
         rm_elem(x1.indptr, x1.data, ps)
 
         x1.eliminate_zeros()
-        #sparse.save_npz(fn, x1)
-        sparse_save_npz(fn, x1)
+        sparse.save_npz(fn, x1)
 
 
 def find_cutoff_row(elems):
@@ -3449,8 +3435,7 @@ def find_cutoff_row(elems):
         a, b, tmp_path, p, S, R = elem
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            #x1 = sparse.load_npz(fn)
-            x1 = sparse_load_npz(fn)
+            x1 = sparse.load_npz(fn)
         except:
             continue
 
@@ -3467,7 +3452,7 @@ def find_cutoff_row(elems):
 
     csrsort(x0)
 
-    print 'max_diff', np.diff(x0.indptr).max(), x0.nnz, x0.indptr
+    #print 'max_diff', np.diff(x0.indptr).max(), x0.nnz, x0.indptr
     ps = find_lower(x0.indptr, x0.data, prune=p, S=S, R=R)
 
     # prune
@@ -3475,8 +3460,7 @@ def find_cutoff_row(elems):
         a, b, tmp_path, p, S, R = elem
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            #x1 = sparse.load_npz(fn)
-            x1 = sparse_load_npz(fn)
+            x1 = sparse.load_npz(fn)
         except:
             continue
         # remove small element
@@ -3484,8 +3468,7 @@ def find_cutoff_row(elems):
         rm_elem(x1.indptr, x1.data, ps)
 
         x1.eliminate_zeros()
-        #sparse.save_npz(fn, x1)
-        sparse_save_npz(fn, x1)
+        sparse.save_npz(fn, x1)
 
 
 
@@ -3501,8 +3484,7 @@ def find_cutoff_col_mg(elems):
         print 'cutoff_ab_fk', a, b, elems
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            #x1 = sparse.load_npz(fn).T
-            x1 = sparse_load_npz(fn).T
+            x1 = sparse.load_npz(fn).T
         except:
             print 'max_fn', fn
 
@@ -3529,8 +3511,7 @@ def find_cutoff_col_mg(elems):
         b, a = a, b
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            #x1 = sparse.load_npz(fn).T
-            x1 = sparse_load_npz(fn).T
+            x1 = sparse.load_npz(fn).T
         except:
             continue
         # remove small element
@@ -3544,9 +3525,7 @@ def find_cutoff_col_mg(elems):
 
         print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
 
-        #sparse.save_npz(fn, x1.T)
-        sparse_save_npz(fn, x1.T)
-
+        sparse.save_npz(fn, x1.T)
 
 
 def find_cutoff_col(elems):
@@ -3559,8 +3538,7 @@ def find_cutoff_col(elems):
         print 'cutoff_ab_fk', a, b, elems
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            #x1 = sparse.load_npz(fn).T
-            x1 = sparse_load_npz(fn).T
+            x1 = sparse.load_npz(fn).T
         except:
             print 'max_fn', fn
 
@@ -3589,8 +3567,7 @@ def find_cutoff_col(elems):
         b, a = a, b
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            #x1 = sparse.load_npz(fn).T
-            x1 = sparse_load_npz(fn).T
+            x1 = sparse.load_npz(fn).T
         except:
             continue
         # remove small element
@@ -3604,8 +3581,7 @@ def find_cutoff_col(elems):
 
         print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
 
-        #sparse.save_npz(fn, x1.T)
-        sparse_save_npz(fn, x1.T)
+        sparse.save_npz(fn, x1.T)
 
 
 
@@ -3971,7 +3947,6 @@ def mul(qry, shape=(10**8, 10**8), tmp_path=None, csr=False):
     # rename
     for i in fns:
         os.system('mv %s_new.npz %s' % (i, i))
-
 
     return row_sum
 
@@ -4435,8 +4410,7 @@ def submerge(xys):
             try:
                 tmp = load_matrix(rc, shape, csr=csr)
                 print 'rm old file', rc
-                #os.system('rm %s'%rc)
-                rmname(rc)
+                os.system('rm %s'%rc)
                 print 'rmed old file', rc
 
             except:
@@ -4448,9 +4422,7 @@ def submerge(xys):
 
 
     if type(z) != type(None):
-        #sparse.save_npz(out+'_merge', z)
-        sparse_save_npz(out+'_merge', z)
-
+        sparse.save_npz(out+'_merge', z)
         fns_new = out
         #row_sum = np.asarray(z.sum(0), 'float32')[0]
         #row_sum_n = out + '_rowsum.npz'
@@ -4469,8 +4441,7 @@ def submerge(xys):
             try:
                 tmp_old = load_matrix(rc + '_old', shape, csr=csr)
                 print 'rm prev old file', rc + '_old'
-                #os.system('rm %s_old'%rc)
-                rmname(rc)
+                os.system('rm %s_old'%rc)
                 print 'rmed prev old file', rc + '_old'
 
             except:
@@ -4481,9 +4452,7 @@ def submerge(xys):
                 z_old = tmp_old
 
     if type(z_old) != type(None):
-        #sparse.save_npz(out+'_old_merge', z_old)
-        sparse_save_npz(out+'_old_merge', z_old)
-
+        sparse.save_npz(out+'_old_merge', z_old)
         #os.system('mv %s_old.npz %s_old'%(out, out))
         del z_old
         gc.collect()
@@ -4713,8 +4682,7 @@ def merge_submat3(fns, shape=(10**7, 10**7), csr=False, cpu=1):
 def merge_submat(fns, shape=(10**7, 10**7), csr=False, cpu=1):
     #fns = [tmp_path+'/'+elem for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
     tmp_path = os.sep.join(fns[0].split(os.sep)[:-1])
-    #names = [elem.split(os.sep)[-1].split('.npz')[0].split('_') for elem in fns if elem.endswith('.npz') or elem.endswith('.npz_old')]
-    names = [elem[:-2].split(os.sep)[-1].split('.npz')[0].split('_') for elem in fns if elem.endswith('.npz_R') or elem.endswith('.npz_old_R')]
+    names = [elem.split(os.sep)[-1].split('.npz')[0].split('_') for elem in fns if elem.endswith('.npz') or elem.endswith('.npz_old')]
     names = map(int, sum(names, []))
     N = max(names) + 1
     names = range(N)
@@ -5502,14 +5470,12 @@ def badd_disk(xyzs):
     idx = None
     for i in xyzs:
         if type(z) == type(None):
-            #z = sparse.load_npz('tmp_mat_%d.npz'%i)
-            z = sparse_load_npz('tmp_mat_%d.npz'%i)
+            z = sparse.load_npz('tmp_mat_%d.npz'%i)
             idx = i
         else:
-            #z += sparse.load_npz('tmp_mat_%d.npz'%i)
-            z += sparse_load_npz('tmp_mat_%d.npz'%i)
+            z += sparse.load_npz('tmp_mat_%d.npz'%i)
 
-        os.system('rm tmp_mat_%d.npz_*'%i)
+        os.system('rm tmp_mat_%d.npz'%i)
 
     if type(z) != type(None) and idx != None:
         sparse.save_npz('tmp_mat_%d'%idx, z)
@@ -5566,11 +5532,8 @@ def bmerge_disk(zs, cpu=1):
     try:
         #return zs[0]
         idx = zs[0]
-        #z = sparse.load_npz('tmp_mat_%d.npz'%idx)
         z = sparse.load_npz('tmp_mat_%d.npz'%idx)
-        #os.system('rm tmp_mat_%d.npz'%idx)
-        rmname('tmp_mat_%d.npz'%idx)
-
+        os.system('rm tmp_mat_%d.npz'%idx)
     except:
         z = None
 
@@ -5631,9 +5594,7 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
 
     nnz = z.nnz
     xyn = tmp_path + '/' + str(xi) + '_' + str(yi) + '.npz'
-    #sparse.save_npz(xyn + '_new', z)
-    sparse_save_npz(xyn + '_new', z)
-
+    sparse.save_npz(xyn + '_new', z)
     row_sum_n = tmp_path + '/' + str(xi) + '_' + str(yi) + '_rowsum.npz'
     np.savez_compressed(row_sum_n, row_sum)
     del z
@@ -5765,8 +5726,7 @@ def element_gpu(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I
     z.eliminate_zeros()
     nnz = z.nnz
     xyn = tmp_path + '/' + str(xi) + '_' + str(yi) + '.npz'
-    #sparse.save_npz(xyn + '_new', z)
-    sparse_save_npz(xyn + '_new', z)
+    sparse.save_npz(xyn + '_new', z)
 
     #return row_sum
     #row_sum = z.sum(0)
@@ -6971,7 +6931,6 @@ def element_wrapper_gpu(elems):
 
         nnz = z.nnz
         xyn = tmp_path + '/' + str(xi) + '_' + str(yi) + '.npz'
-        #sparse.save_npz(xyn + '_new', z)
         sparse.save_npz(xyn + '_new', z)
 
         row_sum_n = tmp_path + '/' + str(xi) + '_' + str(yi) + '_rowsum.npz'
@@ -7583,11 +7542,7 @@ def expand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e
         tmp_path = qry + '_tmpdir'
 
     err = None
-
-    #Ns = [elem.split('.')[0].split('_') for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
-    Ns = [elem[:-2].split('.')[0].split('_') for elem in os.listdir(tmp_path) if elem.endswith('.npz_R')]
-
-
+    Ns = [elem.split('.')[0].split('_') for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
     N = max([max(map(int, elem)) for elem in Ns]) + 1
     d = N
 
@@ -7647,26 +7602,19 @@ def expand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e
             nnz = max(nnz, elem[2])
 
     # remove old file
-    #old_fns = [tmp_path + os.sep + elem for elem in os.listdir(tmp_path) if elem.endswith('_old')]
-    old_fns = [tmp_path + os.sep + elem[:-2] for elem in os.listdir(tmp_path) if elem.endswith('_old_R')]
-
+    old_fns = [tmp_path + os.sep + elem for elem in os.listdir(tmp_path) if elem.endswith('_old')]
     for i in old_fns:
-        #os.system('rm %s'%i)
-        rmname(i)
+        os.system('rm %s'%i)
 
     # rename
     fns = []
     for x in xrange(d):
         for y in xrange(d):
             fn = tmp_path + os.sep + str(x) + '_' + str(y) + '.npz'
-            #if os.path.isfile(fn):
-            if os.path.isfile(fn + '_R'):
-                #os.system('mv %s %s_old' % (fn, fn))
-                rename(fn, 'c2o')
-            #if os.path.isfile(fn+'_new.npz'):
-            if os.path.isfile(fn+'_new.npz' + '_R'):
-                #os.system('mv %s_new.npz %s' % (fn, fn))
-                rename(fn, 'n2c')
+            if os.path.isfile(fn):
+                os.system('mv %s %s_old' % (fn, fn))
+            if os.path.isfile(fn+'_new.npz'):
+                os.system('mv %s_new.npz %s' % (fn, fn))
                 fns.append(fn)
 
     return row_sum, fns, nnz
@@ -8554,10 +8502,8 @@ def sdiv(parameters, row_sum=None, dtype='float32'):
         x.eliminate_zeros()
         print 'norm after nnz', x.nnz, fn
 
-        #sparse.save_npz(fn + '_new', x)
-        sparse_save_npz(fn + '_new', x)
-        #os.system('mv %s_new.npz %s' % (fn, fn))
-        rename(fn)
+        sparse.save_npz(fn + '_new', x)
+        os.system('mv %s_new.npz %s' % (fn, fn))
         if check:
             try:
                 x_old = load_matrix(fn + '_old', shape=shape, csr=csr)
@@ -8725,9 +8671,7 @@ def sdiv_gpu(parameters, row_sum=None, dtype='float32'):
         x.eliminate_zeros()
         print 'norm after nnz', x.nnz, fn
 
-        #sparse.save_npz(fn + '_new', x)
         sparse.save_npz(fn + '_new', x)
-
         os.system('mv %s_new.npz %s' % (fn, fn))
         #os.system('cp %s_new.npz %s' % (fn, fn))
 
@@ -10065,7 +10009,7 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
         f = open(tmp_path + '_dict.pkl', 'rb')
         q2n = cPickle.load(f)
         N = len(q2n)
-        os.system('rm %s/*new* %s/*old_*'%(tmp_path, tmp_path))
+        os.system('rm %s/*new* %s/*old'%(tmp_path, tmp_path))
         f.close()
 
 

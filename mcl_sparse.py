@@ -3422,7 +3422,7 @@ def find_cutoff_row(elems):
 
     csrsort(x0)
 
-    print 'max_diff', np.diff(x0.indptr).max(), x0.nnz, x0.indptr
+    #print 'max_diff', np.diff(x0.indptr).max(), x0.nnz, x0.indptr
     ps = find_lower(x0.indptr, x0.data, prune=p, S=S, R=R)
 
     # prune

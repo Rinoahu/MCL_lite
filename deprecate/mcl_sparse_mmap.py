@@ -102,7 +102,7 @@ else:
 
 
 # sparse load and save function which avoid 2GB limit
-def sparse_load_npz(fn, x):
+def sparse_save_npz(fn, x):
     R, C, D = x.indptr, x.indices, x.data
     name = fn.endswith('.npz') and fn or fn + '.npz'
     fpr = np.memmap(fn+'_R', mode='w+', shape=R.size, dtype='int32')
@@ -3419,7 +3419,7 @@ def find_cutoff_row_mg(elems):
 
 
 
-    print 'max_diff', np.diff(x0.indptr).max(), x0.nnz, x0.indptr
+    #print 'max_diff', np.diff(x0.indptr).max(), x0.nnz, x0.indptr
     ps = find_lower(x0.indptr, x0.data, prune=p, S=S, R=R)
 
     # prune
