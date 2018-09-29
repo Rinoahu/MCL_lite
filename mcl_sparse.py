@@ -8555,8 +8555,9 @@ def sdiv5(parameters, row_sum=None, dtype='float32'):
 
 
 # correct sdiv
-def sdiv(parameters, row_sum=None, dtype='float32'):
+def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
     fn, shape, csr, check, rtol, tmp_path, prune = parameters
+    P = int(1./prune) + 1
     if type(row_sum) == type(None):
         row_sum = np.asarray(np.memmap(tmp_path+'/row_sum_total.npy', mode='r', dtype='float32'))
 
@@ -8569,6 +8570,21 @@ def sdiv(parameters, row_sum=None, dtype='float32'):
         #x = xt.T
         #del xt
         #gc.collect()
+
+
+        # reduce the size of matrix
+        if order == 'c':
+            xt = x.T
+        else:
+            xt = x
+
+
+        a, b, c = xt.indices, xt.indptr, xt.data
+        select_jit(a, b, c, S=P)
+        if order == 'c':
+            x = xt.T
+        else:
+            x = xt
 
 
 
