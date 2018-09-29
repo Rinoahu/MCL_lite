@@ -3115,7 +3115,7 @@ def csrmg_jit1(a0, b0, c0, a1, b1, c1, S=1):
 
 
 @njit(cache=True)
-def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
+def csrmg_jit2(a0, b0, c0, a1, b1, c1, S=1):
     #a0, b0, c0 = x0.indices, x0.indptr, x0.data
     #a1, b1, c1 = x1.indices, x1.indptr, x1.data
     #row_min = np.empty(b0.size, c0.dtype)
@@ -3180,6 +3180,113 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
     #z = sparse.csr_matrix((c2, a2, b2), shape=x0.shape, dtype=x0.dtype)
     #return z
     return a2, b2, c2
+
+
+
+
+@njit(cache=True)
+def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
+    #a0, b0, c0 = x0.indices, x0.indptr, x0.data
+    #a1, b1, c1 = x1.indices, x1.indptr, x1.data
+    #row_min = np.empty(b0.size, c0.dtype)
+    assert b0.size == b1.size
+    print 'csrmg_jit_size_fk', len(a0), len(b0), len(c0), len(a1), len(b1), len(c1), S
+    n = b0.size
+    #nnz = min(a0.size + a1.size, b0.size*S)
+    nnz = a0.size + a1.size
+    a2, b2, c2 = np.empty(nnz, a0.dtype), np.empty(n, b0.dtype), np.empty(nnz, c0.dtype)
+    b2[0] = 0
+    ptr = 0
+    c_mg = np.empty(S, c0.dtype)
+    a_mg = np.empty(S, a0.dtype)
+
+    for i in xrange(n-1):
+        st0, ed0 = b0[i:i+2]
+        st1, ed1 = b1[i:i+2]
+        p0, p1 = st0, st1
+        #if flag > 0:
+        #    print 'csrmg_jit_fk', flag
+        #row_min[i] = a2[ptr-1]
+        ptr_mg = 0
+        #c_mg[:] = 0
+        #a_mg[:] = 0
+        while p0 < ed0 and p1 < ed1 and ptr_mg < S:
+            if c0[p0] >= c1[p1]:
+                c_mg[ptr_mg] = c0[p0]
+                a_mg[ptr_mg] = a0[p0]
+                p0 += 1
+            else:
+                c_mg[ptr_mg] = c1[p1]
+                a_mg[ptr_mg] = a1[p1]
+                p1 += 1
+            ptr_mg += 1
+
+        #print 'csrmg_jit_while_fk', ln_mg, ptr_mg, p0, ed0, p1, ed1
+        if ptr_mg < S and p0 >= ed0 and p1 >= ed1:
+            c_mg[ptr_mg: ] = 0
+            a_mg[ptr_mg: ] = 0
+
+        elif ptr_mg < S and p0 < ed0 and p1 >= ed1:
+            M = min(ed0 - p0, S - ptr_mg)
+            c_mg[ptr_mg: ptr_mg+M] = c0[p0: p0+M]
+            a_mg[ptr_mg: ptr_mg+M] = a0[p0: p0+M]
+
+        elif ptr_mg < S and p0 >= ed0 and p1 < ed1:
+            M = min(ed1 - p1, S - ptr_mg)
+            #c_mg[ptr_mg:] = c1[p1: ed1]
+            #a_mg[ptr_mg:] = a1[p1: ed1]
+            c_mg[ptr_mg: ptr_mg+M] = c1[p1: p1+M]
+            a_mg[ptr_mg: ptr_mg+M] = a1[p1: p1+M]
+
+
+        else:
+            pass
+
+        #print 'csrmg_jit_while_fk_end', ln_mg, ptr_mg, p0, ed0, p1, ed1
+
+
+        c_mg_S = c_mg[:S]
+        a_mg_S = a_mg[:S]
+        flag = c_mg_S.size
+        c2[ptr:ptr+flag] = c_mg_S
+        a2[ptr:ptr+flag] = a_mg_S
+        ptr += flag
+
+
+        b2[i+1] = ptr
+
+    #print 'csrmge_jit_ptr_fk', ptr
+    a2 = a2[:ptr]
+    c2 = c2[:ptr]
+    #z = sparse.csr_matrix((c2, a2, b2), shape=x0.shape, dtype=x0.dtype)
+    #return z
+    return a2, b2, c2
+
+
+
+# select
+@njit(cache=True)
+def select_jit(a, b, c, S=1):
+    #a, b, c = x.indices, x.indptr, x.data
+    n = b.size
+    flag = 0
+    for i in xrange(n-1):
+        st, ed = b[i:i+2]
+        m = ed - st
+        if m <= S:
+            #print st, ed
+            continue
+        else:
+            rdata = c[st:ed]
+            idx = rdata.argsort()
+            p = idx[-S:]
+            rdata[rdata<p] = 0
+            c[st:ed] = rdata
+            flag += 1
+
+    #print('sorting', flag, 'times')
+    return flag
+
 
 
 
