@@ -7,7 +7,7 @@ git config --global user.name Rinoahu
 git remote rm origin
 
 git add -A .
-git commit -m 'fix some bugs in pruning step'
+git commit -m 'reduce disk usage by reducing the matrix size'
 git remote add origin https://github.com/Rinoahu/MCL_lite
 
 git pull origin master

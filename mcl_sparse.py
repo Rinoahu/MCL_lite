@@ -3225,19 +3225,21 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
         if ptr_mg < S and p0 >= ed0 and p1 >= ed1:
             c_mg[ptr_mg: ] = 0
             a_mg[ptr_mg: ] = 0
+            end = ptr_mg
 
         elif ptr_mg < S and p0 < ed0 and p1 >= ed1:
             M = min(ed0 - p0, S - ptr_mg)
             c_mg[ptr_mg: ptr_mg+M] = c0[p0: p0+M]
             a_mg[ptr_mg: ptr_mg+M] = a0[p0: p0+M]
+            end = ptr_mg + M
 
         elif ptr_mg < S and p0 >= ed0 and p1 < ed1:
-            M = min(ed1 - p1, S - ptr_mg)
+            M = min(ed1-p1, S-ptr_mg)
             #c_mg[ptr_mg:] = c1[p1: ed1]
             #a_mg[ptr_mg:] = a1[p1: ed1]
             c_mg[ptr_mg: ptr_mg+M] = c1[p1: p1+M]
             a_mg[ptr_mg: ptr_mg+M] = a1[p1: p1+M]
-
+            end = ptr_mg + M
 
         else:
             pass
@@ -3245,12 +3247,14 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1):
         #print 'csrmg_jit_while_fk_end', ln_mg, ptr_mg, p0, ed0, p1, ed1
 
 
-        c_mg_S = c_mg[:S]
-        a_mg_S = a_mg[:S]
-        flag = c_mg_S.size
-        c2[ptr:ptr+flag] = c_mg_S
-        a2[ptr:ptr+flag] = a_mg_S
-        ptr += flag
+        #c_mg_S = c_mg[:S]
+        #a_mg_S = a_mg[:S]
+        #flag = c_mg_S.size
+
+        #print 'S_fk_flag', S, flag
+        c2[ptr:ptr+end] = c_mg[:end]
+        a2[ptr:ptr+end] = a_mg[:end]
+        ptr += end
 
 
         b2[i+1] = ptr
@@ -10682,7 +10686,9 @@ def manual_print():
     print 'Parameters:'
     print '  -i: adjacency matrix. A tab-delimited file which contain 3, 4, 12 or 14 columns'
     print '  -I: float. inflation parameter for mcl'
-    print '  -P: float. prune parameter'
+    print '  -p: float. cutoff of prune parameter'
+    print '  -P: float. inverse of -p'
+
     print '  -R: float. recover parameter'
     print '  -S: float. select parameter'
     print '  -a: int. cpu number'
@@ -10698,7 +10704,7 @@ if __name__ == '__main__':
 
     argv = sys.argv
     # recommand parameter:
-    args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 't', '-g': '0', '-r': 'f', '-m': '4', '-P':'1/4e3', '-S':'1100', '-R':'1400'}
+    args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 't', '-g': '0', '-r': 'f', '-m': '4', '-p':'1/4e3', '-P':'0', '-S':'1100', '-R':'1400'}
 
     N = len(argv)
     for i in xrange(1, N):
@@ -10721,7 +10727,8 @@ if __name__ == '__main__':
         raise SystemExit()
 
     try:
-        qry, ifl, cpu, bch, ofn, sym, gpu, rsm, mem, pru, slc, rcv = args['-i'], float(eval(args['-I'])), int(eval(args['-a'])), int(eval(args['-b'])), args['-o'], args['-d'], int(eval(args['-g'])), args['-r'], float(eval(args['-m'])), float(eval(args['-P'])), int(eval(args['-S'])), int(eval(args['-R']))
+        qry, ifl, cpu, bch, ofn, sym, gpu, rsm, mem, pru, slc, rcv, PRU = args['-i'], float(eval(args['-I'])), int(eval(args['-a'])), int(eval(args['-b'])), args['-o'], args['-d'], int(eval(args['-g'])), args['-r'], float(eval(args['-m'])), float(eval(args['-p'])), int(eval(args['-S'])), int(eval(args['-R'])), float(eval(args['-P']))
+        pru = PRU >= 1 and 1./PRU or pru
         if sym.lower().startswith('f'):
             sym = False
         elif sym.lower().startswith('t'):
