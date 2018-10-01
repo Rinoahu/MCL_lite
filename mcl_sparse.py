@@ -8042,7 +8042,7 @@ def expand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e
 
 
 
-def rexpand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e3, cpu=1, fast=False):
+def regularize(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1/4e3, cpu=1, fast=False):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -9143,12 +9143,6 @@ def rsdiv(parameters, row_sum=None, dtype='float32', order='c'):
         return err
     else:
         return float('+inf')
-
-
-
-
-
-
 
 
 
@@ -10854,7 +10848,7 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
 
 
 # regularized MCL
-def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=300, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4, rgl=True):
+def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4, rgl=True):
 
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
@@ -10906,9 +10900,9 @@ def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=140
         #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True)
 
         if i == 0:
-            row_sum, fns, nnz = rexpand(qry, shape, tmp_path, True, I, prune, cpu, fast=True)
+            row_sum, fns, nnz = regularize(qry, shape, tmp_path, True, I, prune, cpu, fast=True)
         else:
-            row_sum, fns, nnz = rexpand(qry, shape, tmp_path, True, I, prune, cpu)
+            row_sum, fns, nnz = regularize(qry, shape, tmp_path, True, I, prune, cpu)
 
         if i > check and i % check == 0:
             print 'reorder the matrix'
