@@ -3290,6 +3290,7 @@ def select_jit(a, b, c, S=1000000):
             flag += 1
 
     #print('sorting', flag, 'times')
+    print 'select_S', S
     return flag
 
 
@@ -9008,13 +9009,14 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
             xt = x
 
 
-        a, b, c = xt.indices, xt.indptr, xt.data
-        select_jit(a, b, c, S=P)
+        #a, b, c = xt.indices, xt.indptr, xt.data
+        #select_jit(a, b, c, S=P)
+        select_jit(xt.indices, xt.indptr, xt.data, S=P)
+
         if order == 'c':
             x = xt.T
         else:
             x = xt
-
 
 
         # convert entries to 16 bit float
