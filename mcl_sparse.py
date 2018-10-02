@@ -3283,8 +3283,9 @@ def select_jit(a, b, c, S=1000000):
         else:
             rdata = c[st:ed]
             idx = rdata.argsort()
-            p = idx[-S:]
-            rdata[rdata<p] = 0
+            #p = idx[-S:]
+            #rdata[rdata<p] = 0
+            rdata[idx[:-S]] = 0
             c[st:ed] = rdata
             flag += 1
 
