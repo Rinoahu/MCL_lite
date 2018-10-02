@@ -5911,7 +5911,7 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
 
     z = bmerge(zs, cpu=cpu)
     #z = bmerge_disk(zs, cpu=cpu)
-    print 'breakpoint', zs, z
+    #print 'breakpoint', zs, z
     #raise SystemExit()
     if type(z) == type(None):
         #print 'return_none_z'
@@ -9011,6 +9011,7 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
 
         #a, b, c = xt.indices, xt.indptr, xt.data
         #select_jit(a, b, c, S=P)
+        print 'sdiv_fk_S', prune, P
         select_jit(xt.indices, xt.indptr, xt.data, S=P)
 
         if order == 'c':
@@ -10742,7 +10743,7 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
     # reorder matrix
     #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=False, block=block, cpu=cpu)
     # norm
-    fns, cvg, nnz = norm(qry, shape, tmp_path, csr=False, cpu=cpu)
+    fns, cvg, nnz = norm(qry, shape, tmp_path, csr=False, cpu=cpu, prune=prune)
 
     #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
     pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
@@ -10766,12 +10767,12 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
 
         if i > check and i % check == 0:
             print 'reorder the matrix'
-            fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, check=True, cpu=cpu)
+            fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, check=True, cpu=cpu, prune=prune)
             #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True, block=block, cpu=cpu)
 
         else:
             #os.system('rm %s/*.npz_old'%tmp_path)
-            fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu)
+            fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu, prune=prune)
 
         #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
         pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
@@ -10885,7 +10886,7 @@ def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=140
     # reorder matrix
     #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=False, block=block, cpu=cpu)
     # norm
-    fns, cvg, nnz = rnorm(qry, shape, tmp_path, csr=False, cpu=cpu, check=True, rgl=True)
+    fns, cvg, nnz = rnorm(qry, shape, tmp_path, csr=False, cpu=cpu, check=True, rgl=True, prune=prune)
 
     #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
     pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
@@ -10909,12 +10910,12 @@ def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=140
 
         if i > check and i % check == 0:
             print 'reorder the matrix'
-            fns, cvg, nnz = rnorm(qry, shape, tmp_path, row_sum=row_sum, csr=True, check=True, cpu=cpu, rgl=False)
+            fns, cvg, nnz = rnorm(qry, shape, tmp_path, row_sum=row_sum, csr=True, check=True, cpu=cpu, rgl=False, prune=prune)
             #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True, block=block, cpu=cpu)
 
         else:
             #os.system('rm %s/*.npz_old'%tmp_path)
-            fns, cvg, nnz = rnorm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu, rgl=False)
+            fns, cvg, nnz = rnorm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu, rgl=False, prune=prune)
 
         #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
         pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
