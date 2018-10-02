@@ -5683,7 +5683,7 @@ def bkmat(xyns, cpu=1):
             z += z0
         else:
             z = z0
-    print 'get z', z
+    #print 'get z', z
     return z
 
 def badd0(xy):
