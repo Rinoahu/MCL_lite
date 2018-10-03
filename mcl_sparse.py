@@ -3482,11 +3482,11 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True, Pct=.9):
 
         pct = rdata[idx].sum()
 
-        #pct_max = max(pct, pct_max)
-        #pct_min = min(pct, pct_min)
+        pct_max = max(pct, pct_max)
+        pct_min = min(pct, pct_min)
 
-        pct_max = max(pct, rdata.sum())
-        pct_min = min(pct, rdata.sum())
+        #pct_max = max(pct, rdata.sum())
+        #pct_min = min(pct, rdata.sum())
 
         if j < R < m and pct < Pct:
             ps[i] = rdata[R]
@@ -3839,13 +3839,12 @@ def find_cutoff_col_mg(elems):
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
             xtmp = sparse.load_npz(fn)
-            try:
-                rowsum += xtmp.sum(0)
-            except:
-                rowsum = xtmp.sum(0)
+            #try:
+            #    rowsum += xtmp.sum(0)
+            #except:
+            #    rowsum = xtmp.sum(0)
 
-            x1 = xtmp.T
-
+            x1 = xtmp.T.tocsr()
 
         except:
             print 'max_fn', fn
@@ -3853,10 +3852,10 @@ def find_cutoff_col_mg(elems):
 
         # sort x1
         csrsort(x1)
-        try:
-            colsum += x1.sum(0)
-        except:
-            colsum = x1.sum(0)
+        #try:
+        #    colsum += x1.sum(0)
+        #except:
+        #    colsum = x1.sum(0)
 
 
         print 'csrsorting', x1.nnz
@@ -3882,7 +3881,8 @@ def find_cutoff_col_mg(elems):
         #a, a = a, b
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            x1 = sparse.load_npz(fn).T
+            xtmp = sparse.load_npz(fn).T
+            x1 = xtmp.tocsr()
         except:
             continue
         # remove small element
@@ -3902,8 +3902,8 @@ def find_cutoff_col_mg(elems):
 
 
 
-find_cutoff = find_cutoff_col
-#find_cutoff = find_cutoff_col_mg
+#find_cutoff = find_cutoff_col
+find_cutoff = find_cutoff_col_mg
 #find_cutoff = find_cutoff_row_mg
 
 
