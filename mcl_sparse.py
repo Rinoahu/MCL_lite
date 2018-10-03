@@ -3290,7 +3290,7 @@ def select_jit(a, b, c, S=1000000):
             flag += 1
 
     #print('sorting', flag, 'times')
-    print 'select_S', S
+    print 'select_S', S, flag
     return flag
 
 
@@ -3411,6 +3411,7 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True):
     ps = np.empty(n, data.dtype)
     ps[:] = prune
     #ps = np.zeros(n, data.dtype)
+    print 'find_lower_P_fk', prune
     for i in xrange(n-1):
         st, ed = indptr[i:i+2]
         rdata = data[st:ed]
@@ -3668,8 +3669,8 @@ def find_cutoff_col(elems):
 
 
 
-#find_cutoff = find_cutoff_col_mg
-find_cutoff = find_cutoff_row_mg
+find_cutoff = find_cutoff_col_mg
+#find_cutoff = find_cutoff_row_mg
 
 
 # prune
@@ -11483,7 +11484,7 @@ if __name__ == '__main__':
 
     argv = sys.argv
     # recommand parameter:
-    args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 't', '-g': '0', '-r': 'f', '-m': '4', '-p':'1/4e3', '-P':'0', '-S':'1100', '-R':'1400', '-A':'mcl'}
+    args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 't', '-g': '0', '-r': 'f', '-m': '4', '-p':'1/4e3', '-P':'0', '-S':'700', '-R':'800', '-A':'mcl'}
 
     N = len(argv)
     for i in xrange(1, N):
