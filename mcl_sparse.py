@@ -3737,6 +3737,7 @@ def find_cutoff_col_mg(elems):
         return []
     x0 = None
     rowsum = None
+    colsum = None
     for elem in elems:
         a, b, tmp_path, P, S, R = elem
         #b, a = a, b
@@ -3750,6 +3751,13 @@ def find_cutoff_col_mg(elems):
                 rowsum = xtmp.sum(0)
 
             x1 = xtmp.T
+            try:
+                colsum += x1.sum(0)
+            except:
+                colsum = x1.sum(0)
+
+
+
         except:
             print 'max_fn', fn
             continue
@@ -3767,7 +3775,7 @@ def find_cutoff_col_mg(elems):
 
     x0.eliminate_zeros()
     #print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
-    print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max(), rowsum.max()
+    print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max(), rowsum.max(), colsum.max()
     #x0t = x0.T
     #ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
     ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
