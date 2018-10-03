@@ -3466,7 +3466,7 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True, Pct=.9):
     print 'find_lower_P_fk', prune
     flag = 0
     pct_max = 0
-    pct_min = 1000000000000000000000000
+    pct_min = 2**30
     for i in xrange(n-1):
         st, ed = indptr[i:i+2]
         rdata = data[st:ed]
