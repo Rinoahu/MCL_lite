@@ -3760,9 +3760,9 @@ def find_cutoff_col_mg(elems):
         # sort x1
         csrsort(x1)
         try:
-            colsum += x1.sum(0)
+            colsum += x1.sum(1)
         except:
-            colsum = x1.sum(0)
+            colsum = x1.sum(1)
 
 
         print 'csrsorting', x1.nnz
