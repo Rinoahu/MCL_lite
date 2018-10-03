@@ -3479,9 +3479,14 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True, Pct=.9):
         m = rdata.size
         idx = rdata > prune
         j = idx.sum()
+
         pct = rdata[idx].sum()
-        pct_max = max(pct, pct_max)
-        pct_min = min(pct, pct_min)
+
+        #pct_max = max(pct, pct_max)
+        #pct_min = min(pct, pct_min)
+
+        pct_max = max(pct, rdata.sum())
+        pct_min = min(pct, rdata.sum())
 
         if j < R < m and pct < Pct:
             ps[i] = rdata[R]
@@ -3744,6 +3749,7 @@ def find_cutoff_col(elems):
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
             x1 = sparse.load_npz(fn)
+            x1 = x1.T.tocsr()
             #xtmp = sparse.load_npz(fn)
             #try:
             #    rowsum += xtmp.sum(0)
@@ -3774,7 +3780,6 @@ def find_cutoff_col(elems):
             #x0 = csrmerge(x0, x1, P, S, R)
             x0 += x1
 
-    x0 = x0.T
     csrsort(x0)
 
     #a, b, c = x.indices, x.indptr, x.data
@@ -3799,7 +3804,9 @@ def find_cutoff_col(elems):
         #a, a = a, b
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            x1 = sparse.load_npz(fn).T
+            #x1 = sparse.load_npz(fn).T
+            x1 = sparse.load_npz(fn).T.tocsr()
+
         except:
             continue
         # remove small element
@@ -3813,7 +3820,7 @@ def find_cutoff_col(elems):
 
         print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
 
-        sparse.save_npz(fn, x1.T)
+        sparse.save_npz(fn, x1.T.tocsr())
 
 
 
