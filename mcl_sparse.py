@@ -3301,6 +3301,8 @@ def select_jit(a, b, c, S=1000000):
 #@njit(cache=True)
 def csrmerge(x0, x1, prune=1/4e3, S=1100, R=1400):
     thr = max(int(1./prune)+1, S, R)
+    print 'before_csr_merge', x0.sum(0).max(), x1.sum(0).max(),  x0.sum(1).max(), x1.sum(1).max()
+
     a0, b0, c0 = x0.indices, x0.indptr, x0.data
     a1, b1, c1 = x1.indices, x1.indptr, x1.data
     #a2, b2, c2 = csrmg_jit(a0, b0, c0, a1, b1, c1, S)
@@ -3760,9 +3762,9 @@ def find_cutoff_col_mg(elems):
         # sort x1
         csrsort(x1)
         try:
-            colsum += x1.sum(1)
+            colsum += x1.sum(0)
         except:
-            colsum = x1.sum(1)
+            colsum = x1.sum(0)
 
 
         print 'csrsorting', x1.nnz
