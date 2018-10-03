@@ -3308,7 +3308,8 @@ def csrmerge(x0, x1, prune=1/4e3, S=1100, R=1400):
     #a2, b2, c2 = csrmg_jit(a0, b0, c0, a1, b1, c1, S)
     a2, b2, c2 = csrmg_jit(a0, b0, c0, a1, b1, c1, thr)
     z = sparse.csr_matrix((c2, a2, b2), shape=x0.shape, dtype=x0.dtype)
-    print 'after_csr_merge', len(a0), len(b0), len(c0),  np.diff(b0).max(), '|', len(a1), len(b1), len(c1), np.diff(b0).max(), '|', len(a2), len(b2), len(c2), '|', z.nnz, 1./prune, thr, S, R, np.diff(z.indptr).max()
+    #print 'after_csr_merge', len(a0), len(b0), len(c0),  np.diff(b0).max(), '|', len(a1), len(b1), len(c1), np.diff(b0).max(), '|', len(a2), len(b2), len(c2), '|', z.nnz, 1./prune, thr, S, R, np.diff(z.indptr).max()
+    print 'after_csr_merge', z.sum(0).max(), z.sum(1).max()
     return z
 
 
