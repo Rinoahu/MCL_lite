@@ -5662,9 +5662,9 @@ def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
     norm_dat = z.data / row_sum.take(z.indices, mode='clip')
     #z.data[norm_dat < prune] = 0 
 
-    #P = int(1./prune) + 1
+    P = int(1./prune) + 1
     #print 'element_fk_P', prune, P
-    #select_jit(z.indices, z.indptr, z.data, S=P)
+    select_jit(z.indices, z.indptr, z.data, S=P)
 
     z.eliminate_zeros()
 
@@ -5733,6 +5733,11 @@ def relement_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True,
     row_sum = np.asarray(z.sum(0), 'float32')[0]
     norm_dat = z.data / row_sum.take(z.indices, mode='clip')
     #z.data[norm_dat < prune] = 0 
+
+    P = int(1./prune) + 1
+    #print 'element_fk_P', prune, P
+    select_jit(z.indices, z.indptr, z.data, S=P)
+
     z.eliminate_zeros()
 
     nnz = z.nnz
@@ -6014,9 +6019,9 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
     norm_dat = z.data / row_sum.take(z.indices, mode='clip')
 
     #z.data[norm_dat < prune] = 0
-    #P = int(1./prune) + 1
+    P = int(1./prune) + 1
     #print 'element_fk_P', prune, P
-    #select_jit(z.indices, z.indptr, z.data, S=P)
+    select_jit(z.indices, z.indptr, z.data, S=P)
 
     z.eliminate_zeros()
 
@@ -6082,7 +6087,13 @@ def relement(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.
     # remove element < prune
     row_sum = np.asarray(z.sum(0), 'float32')[0]
     norm_dat = z.data / row_sum.take(z.indices, mode='clip')
-    #z.data[norm_dat < prune] = 0 
+    #z.data[norm_dat < prune] = 0
+
+    P = int(1./prune) + 1
+    #print 'element_fk_P', prune, P
+    select_jit(z.indices, z.indptr, z.data, S=P)
+
+
     z.eliminate_zeros()
 
     nnz = z.nnz
