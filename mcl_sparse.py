@@ -9259,14 +9259,14 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
         print 'max_x_data_fk', x.data.max(), x.sum(0).max(), x.sum(1).max(), row_sum.max(), row_sum.min()
         #xt = load_matrix(fn, shape=shape, csr=csr).T
         #xt.data /= row_sum.take(xt.indices, mode='clip')
-        #x = xt.T
+        #x = xt.T.tocsr()
         #del xt
         #gc.collect()
 
 
         # reduce the size of matrix
         #if order == 'c':
-        #    xt = x.T
+        #    xt = x.T.tocsr()
         #else:
         #    xt = x
 
@@ -9277,7 +9277,7 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
         #select_jit(xt.indices, xt.indptr, xt.data, S=P)
 
         #if order == 'c':
-        #    x = xt.T
+        #    x = xt.T.tocsr()
         #else:
         #    x = xt
 
@@ -9350,18 +9350,17 @@ def rsdiv(parameters, row_sum=None, dtype='float32', order='c'):
 
 
         # reduce the size of matrix
-        if order == 'c':
-            xt = x.T
-        else:
-            xt = x
+        #if order == 'c':
+        #    xt = x.T.tocsr()
+        #else:
+        #    xt = x
 
-
-        a, b, c = xt.indices, xt.indptr, xt.data
+        #a, b, c = xt.indices, xt.indptr, xt.data
         #select_jit(a, b, c, S=P)
-        if order == 'c':
-            x = xt.T
-        else:
-            x = xt
+        #if order == 'c':
+        #    x = xt.T.tocsr()
+        #else:
+        #    x = xt
 
 
 
@@ -11177,7 +11176,7 @@ def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=140
 
         else:
             #os.system('rm %s/*.npz_old'%tmp_path)
-            fns, cvg, nnz = rnorm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu, rgl=False, prune=prune)
+            fns, cvg, nnz = rnorm(qry, shape, tmp_path, row_sum=row_sum, csr=True, check=False, cpu=cpu, rgl=False, prune=prune)
 
         #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
         pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
