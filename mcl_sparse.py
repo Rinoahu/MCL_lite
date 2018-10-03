@@ -3458,13 +3458,15 @@ def find_lower3(indptr, data, prune=1/4e3, S=1100, R=1400, order=True):
 
 
 @njit(cache=True)
-def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True):
+def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True, Pct=.9):
     n = indptr.size
     ps = np.empty(n, data.dtype)
     #ps[:] = prune
     #ps = np.zeros(n, data.dtype)
     print 'find_lower_P_fk', prune
     flag = 0
+    pct_max = 0
+    pct_min = 1000000000000000000000000
     for i in xrange(n-1):
         st, ed = indptr[i:i+2]
         rdata = data[st:ed]
@@ -3472,12 +3474,15 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True):
         idx = rdata > prune
         j = idx.sum()
         pct = rdata[idx].sum()
-        if j < R < m and pct < .85:
+        pct_max = max(pct, pct_max)
+        pct_min = max(pct, pct_min)
+
+        if j < R < m and pct < Pct:
             ps[i] = rdata[R]
             flag += m - R
 
         elif j > S < m:
-            if S < R and pct < .85:
+            if S < R and pct < Pct:
                 ps[i] =  rdata[R]
             else:
                 ps[i] = rdata[S]
@@ -3487,7 +3492,7 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True):
         else:
             ps[i] = prune
 
-    print 'find_lower_rm_fk', flag
+    print 'find_lower_rm_fk', flag, pct_max, pct_min
     return ps
 
 
