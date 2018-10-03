@@ -3757,7 +3757,8 @@ def find_cutoff_col_mg(elems):
             x0 = csrmerge(x0, x1, P, S, R)
 
     x0.eliminate_zeros()
-    print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
+    #print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
+    print 'max_x_mg', x0.sum(0).max()
     ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
 
     # prune
@@ -9140,7 +9141,7 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
     try:
         x = load_matrix(fn, shape=shape, csr=csr)
         x.data /= row_sum.take(x.indices, mode='clip')
-        print 'max_x_data_fk', x.data.max(), x.sum(0).max()
+        print 'max_x_data_fk', x.data.max(), x.sum(0).max(), row_sum.max(), row_sum.min()
         #xt = load_matrix(fn, shape=shape, csr=csr).T
         #xt.data /= row_sum.take(xt.indices, mode='clip')
         #x = xt.T
