@@ -3475,7 +3475,7 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True, Pct=.9):
         j = idx.sum()
         pct = rdata[idx].sum()
         pct_max = max(pct, pct_max)
-        pct_min = max(pct, pct_min)
+        pct_min = min(pct, pct_min)
 
         if j < R < m and pct < Pct:
             ps[i] = rdata[R]
@@ -6057,10 +6057,10 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
 
     # remove element < prune
     row_sum = np.asarray(z.sum(0), 'float32')[0]
-    norm_dat = z.data / row_sum.take(z.indices, mode='clip')
+    #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
 
     #z.data[norm_dat < prune] = 0
-    P = int(1./prune) + 1
+    #P = int(1./prune) + 1
     #print 'element_fk_P', prune, P
     #select_jit(z.indices, z.indptr, z.data, S=P)
 
@@ -6127,10 +6127,10 @@ def relement(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.
 
     # remove element < prune
     row_sum = np.asarray(z.sum(0), 'float32')[0]
-    norm_dat = z.data / row_sum.take(z.indices, mode='clip')
+    #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
     #z.data[norm_dat < prune] = 0
 
-    P = int(1./prune) + 1
+    #P = int(1./prune) + 1
     #print 'element_fk_P', prune, P
     #select_jit(z.indices, z.indptr, z.data, S=P)
 
@@ -9140,6 +9140,7 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
     try:
         x = load_matrix(fn, shape=shape, csr=csr)
         x.data /= row_sum.take(x.indices, mode='clip')
+        print 'max_x_data_fk', x.data.max(), x.sum(0).max()
         #xt = load_matrix(fn, shape=shape, csr=csr).T
         #xt.data /= row_sum.take(xt.indices, mode='clip')
         #x = xt.T
@@ -9148,21 +9149,21 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
 
 
         # reduce the size of matrix
-        if order == 'c':
-            xt = x.T
-        else:
-            xt = x
+        #if order == 'c':
+        #    xt = x.T
+        #else:
+        #    xt = x
 
 
         #a, b, c = xt.indices, xt.indptr, xt.data
         #select_jit(a, b, c, S=P)
-        print 'sdiv_fk_S', prune, P
+        #print 'sdiv_fk_S', prune, P
         #select_jit(xt.indices, xt.indptr, xt.data, S=P)
 
-        if order == 'c':
-            x = xt.T
-        else:
-            x = xt
+        #if order == 'c':
+        #    x = xt.T
+        #else:
+        #    x = xt
 
 
         # convert entries to 16 bit float
