@@ -3674,7 +3674,7 @@ def find_cutoff_col0(elems):
 
 
 
-def find_cutoff_col(elems):
+def find_cutoff_col1(elems):
     if len(elems) <= 0:
         return []
     x0 = None
@@ -3730,6 +3730,90 @@ def find_cutoff_col(elems):
         sparse.save_npz(fn, x1.T)
 
 
+
+def find_cutoff_col(elems):
+    if len(elems) <= 0:
+        return []
+    x0 = None
+    rowsum = None
+    colsum = None
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #b, a = a, b
+        #print 'cutoff_ab_fk', a, b, elems
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn)
+            #xtmp = sparse.load_npz(fn)
+            #try:
+            #    rowsum += xtmp.sum(0)
+            #except:
+            #    rowsum = xtmp.sum(0)
+            #x1 = xtmp.T
+
+
+        except:
+            print 'max_fn', fn
+            continue
+
+        # sort x1
+        #csrsort(x1)
+        #try:
+        #    colsum += x1.sum(0)
+        #except:
+        #    colsum = x1.sum(0)
+
+
+        print 'csrsorting', x1.nnz
+        # merge with x0
+        if type(x0) == type(None):
+            x0 = x1
+        else:
+            #x0 = csrmerge(x0, x1, S)
+            #print 'csrmerge_fk', 1./P, S, R
+            #x0 = csrmerge(x0, x1, P, S, R)
+            x0 += x1
+
+    x0 = x0.T
+    csrsort(x0)
+
+    #a, b, c = x.indices, x.indptr, x.data
+
+    thr = max(1./P, S, R)
+    select_jit(x0.indices, x0.indptr, x0.data, thr)
+
+
+    x0.eliminate_zeros()
+    #print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
+    #print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max(), rowsum.max(), colsum.max()
+    print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max()
+
+    #x0t = x0.T
+    #ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
+    ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
+
+
+    # prune
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #a, a = a, b
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn).T
+        except:
+            continue
+        # remove small element
+        print 'before_before_prune', x1.nnz, 'before_max_row', np.diff(x1.indptr).max(), 1./P, S, R
+        rm_elem(x1.indptr, x1.data, ps)
+
+        x1.eliminate_zeros()
+
+        tmp = np.diff(x1.indptr)
+        tmp_index = np.where(tmp==tmp.max())[0][0]
+
+        print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
+
+        sparse.save_npz(fn, x1.T)
 
 
 
@@ -3811,8 +3895,8 @@ def find_cutoff_col_mg(elems):
 
 
 
-#find_cutoff = find_cutoff_col
-find_cutoff = find_cutoff_col_mg
+find_cutoff = find_cutoff_col
+#find_cutoff = find_cutoff_col_mg
 #find_cutoff = find_cutoff_row_mg
 
 
