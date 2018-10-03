@@ -3473,7 +3473,7 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True, Pct=.9):
     for i in xrange(n-1):
         st, ed = indptr[i:i+2]
         if st == ed:
-            ps[i] = 1
+            ps[i] = prune
             continue
         rdata = data[st:ed]
         m = rdata.size
@@ -3482,8 +3482,8 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True, Pct=.9):
 
         pct = rdata[idx].sum()
 
-        pct_max = max(pct, pct_max)
-        pct_min = min(pct, pct_min)
+        #pct_max = max(pct, pct_max)
+        #pct_min = min(pct, pct_min)
 
         #pct_max = max(pct, rdata.sum())
         #pct_min = min(pct, rdata.sum())
@@ -3503,10 +3503,8 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True, Pct=.9):
         else:
             ps[i] = prune
 
-    print 'find_lower_rm_fk', flag, pct_max, pct_min
+    print 'find_lower_rm_fk', flag
     return ps
-
-
 
 
 
@@ -3898,7 +3896,7 @@ def find_cutoff_col_mg(elems):
 
         print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
 
-        sparse.save_npz(fn, x1.T)
+        sparse.save_npz(fn, x1.T.tocsr())
 
 
 
