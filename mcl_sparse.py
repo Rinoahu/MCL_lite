@@ -3751,11 +3751,6 @@ def find_cutoff_col_mg(elems):
                 rowsum = xtmp.sum(0)
 
             x1 = xtmp.T
-            try:
-                colsum += x1.sum(0)
-            except:
-                colsum = x1.sum(0)
-
 
 
         except:
@@ -3764,6 +3759,12 @@ def find_cutoff_col_mg(elems):
 
         # sort x1
         csrsort(x1)
+        try:
+            colsum += x1.sum(0)
+        except:
+            colsum = x1.sum(0)
+
+
         print 'csrsorting', x1.nnz
         # merge with x0
         if type(x0) == type(None):
