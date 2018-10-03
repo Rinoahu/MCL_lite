@@ -3736,16 +3736,22 @@ def find_cutoff_col_mg(elems):
     if len(elems) <= 0:
         return []
     x0 = None
+    rowsum = None
     for elem in elems:
         a, b, tmp_path, P, S, R = elem
         #b, a = a, b
         print 'cutoff_ab_fk', a, b, elems
         fn = tmp_path + '/%d_%d.npz'%(a, b)
         try:
-            x1 = sparse.load_npz(fn).T
+            xtmp = sparse.load_npz(fn)
+            try:
+                rowsum += xtmp.sum(0)
+            except:
+                rowsum = xtmp.sum(0)
+
+            x1 = xtmp.T
         except:
             print 'max_fn', fn
-
             continue
 
         # sort x1
@@ -3761,7 +3767,7 @@ def find_cutoff_col_mg(elems):
 
     x0.eliminate_zeros()
     #print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
-    print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max()
+    print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max(), rowsum.max()
     #x0t = x0.T
     #ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
     ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
