@@ -3267,7 +3267,6 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1000000):
     return a2, b2, c2
 
 
-
 # select
 @njit(cache=True)
 def select_jit(a, b, c, S=1000000):
@@ -3409,13 +3408,15 @@ def find_lower2(indptr, data, prune=1/4e3, S=1100, R=1400):
 def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True):
     n = indptr.size
     ps = np.empty(n, data.dtype)
-    ps[:] = prune
+    #ps[:] = prune
     #ps = np.zeros(n, data.dtype)
     print 'find_lower_P_fk', prune
+    flag = 0
     for i in xrange(n-1):
         st, ed = indptr[i:i+2]
         rdata = data[st:ed]
-        m = ed - st
+        #m = ed - st
+        m = rdata.size
         if m <= R:
             #row = data[st:ed]
             ps[i] = rdata[-1] 
@@ -3424,27 +3425,34 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True):
         else:
             idx = rdata > prune
             j = idx.sum()
-            if j < R < m:
+            pct = rdata[idx].sum()
+            if j < R < m and pct < .85:
                 #idx_s = row.argsort()
                 #idx_m = idx_s[m-R]
                 #idx_m = idx_s[-R]
                 #ps[i] = row[idx_m]
                 #print'ps_less_2', ps[i]
                 ps[i] = rdata[R]
+                flag += m - R
 
-            elif j > S > R and S < m:
+            elif j > S < m:
                 #idx_s = row.argsort()
                 #idx_m = idx_s[m-S]
                 #idx_m = idx_s[-S]
                 #ps[i] = row[idx_m]
                 #print'ps_more', ps[i]
-                ps[i] = rdata[S]
+                if S < R and pct < .85:
+                    ps[i] =  rdata[R]
+                else:
+                    ps[i] = rdata[S]
+
+                flag += j < S and m - R or m -S
 
             else:
-                #ps[i] = prune
+                ps[i] = prune
                 #print'ps_good', ps[i]
-                continue
-        #print 'find_lower_fk', m
+                #continue
+    print 'find_lower_rm_fk', flag
     return ps
 
 
@@ -3454,7 +3462,9 @@ def find_lower(indptr, data, prune=1/4e3, S=1100, R=1400, order=True):
 # remove element by give threshold
 @njit(cache=True)
 def rm_elem(indptr, data, prune):
-    print 'before_prune_rm', (data>0).sum()
+
+    N = (data>0).sum()
+    #print 'before_prune_rm' 
     n = indptr.size
     for i in xrange(n-1):
         st, ed = indptr[i:i+2]
@@ -3464,7 +3474,9 @@ def rm_elem(indptr, data, prune):
 
         #print (row<p).sum(), row.size
 
-    print 'after_prune_rm', (data>0).sum(), (prune>0).sum()
+    Nw = (data>0).sum()
+    print 'after_prune_rm', N, Nw
+    #print 'after_prune_rm', (data>0).sum(), (prune>0).sum()
 
 
 # find the threshold of prune by row
@@ -3558,61 +3570,7 @@ def find_cutoff_row(elems):
 
 
 # find threshold of prune by col
-def find_cutoff_col_mg(elems):
-    if len(elems) <= 0:
-        return []
-    x0 = None
-    for elem in elems:
-        a, b, tmp_path, P, S, R = elem
-        b, a = a, b
-        print 'cutoff_ab_fk', a, b, elems
-        fn = tmp_path + '/%d_%d.npz'%(a, b)
-        try:
-            x1 = sparse.load_npz(fn).T
-        except:
-            print 'max_fn', fn
-
-            continue
-
-        # sort x1
-        csrsort(x1)
-        print 'csrsorting', x1.nnz
-        # merge with x0
-        if type(x0) == type(None):
-            x0 = x1
-        else:
-            #x0 = csrmerge(x0, x1, S)
-            print 'csrmerge_fk', 1./P, S, R
-            x0 = csrmerge(x0, x1, P, S, R)
-
-    x0.eliminate_zeros()
-    print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
-    ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
-
-    # prune
-    for elem in elems:
-        a, b, tmp_path, P, S, R = elem
-        b, a = a, b
-        fn = tmp_path + '/%d_%d.npz'%(a, b)
-        try:
-            x1 = sparse.load_npz(fn).T
-        except:
-            continue
-        # remove small element
-        print 'before_before_prune', x1.nnz, 'before_max_row', np.diff(x1.indptr).max(), 1./P, S, R
-        rm_elem(x1.indptr, x1.data, ps)
-
-        x1.eliminate_zeros()
-
-        tmp = np.diff(x1.indptr)
-        tmp_index = np.where(tmp==tmp.max())[0][0]
-
-        print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
-
-        sparse.save_npz(fn, x1.T)
-
-
-def find_cutoff_col(elems):
+def find_cutoff_col0(elems):
     if len(elems) <= 0:
         return []
     x0 = None
@@ -3669,6 +3627,125 @@ def find_cutoff_col(elems):
 
 
 
+def find_cutoff_col(elems):
+    if len(elems) <= 0:
+        return []
+    x0 = None
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #b, a = a, b
+        print 'cutoff_ab_fk', a, b, elems
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn).T
+        except:
+            print 'max_fn', fn
+
+            continue
+
+        # sort x1
+        #csrsort(x1)
+        #print 'csrsorting', x1.nnz
+        # merge with x0
+        if type(x0) == type(None):
+            x0 = x1
+        else:
+            #x0 = csrmerge(x0, x1, S)
+            print 'csrmerge_fk', 1./P, S, R
+            #x0 = csrmerge(x0, x1, P, S, R)
+            x0 += x1
+
+    x0 = csrsort(x1)
+    x0.eliminate_zeros()
+    print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
+    ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
+
+    # prune
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #a, a = a, b
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn).T
+        except:
+            continue
+        # remove small element
+        print 'before_before_prune', x1.nnz, 'before_max_row', np.diff(x1.indptr).max(), 1./P, S, R
+        rm_elem(x1.indptr, x1.data, ps)
+
+        x1.eliminate_zeros()
+
+        tmp = np.diff(x1.indptr)
+        tmp_index = np.where(tmp==tmp.max())[0][0]
+
+        #print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
+
+        sparse.save_npz(fn, x1.T)
+
+
+
+
+
+
+
+def find_cutoff_col_mg(elems):
+    if len(elems) <= 0:
+        return []
+    x0 = None
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #b, a = a, b
+        print 'cutoff_ab_fk', a, b, elems
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn).T
+        except:
+            print 'max_fn', fn
+
+            continue
+
+        # sort x1
+        csrsort(x1)
+        print 'csrsorting', x1.nnz
+        # merge with x0
+        if type(x0) == type(None):
+            x0 = x1
+        else:
+            #x0 = csrmerge(x0, x1, S)
+            print 'csrmerge_fk', 1./P, S, R
+            x0 = csrmerge(x0, x1, P, S, R)
+
+    x0.eliminate_zeros()
+    print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
+    ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
+
+    # prune
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #a, a = a, b
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            x1 = sparse.load_npz(fn).T
+        except:
+            continue
+        # remove small element
+        print 'before_before_prune', x1.nnz, 'before_max_row', np.diff(x1.indptr).max(), 1./P, S, R
+        rm_elem(x1.indptr, x1.data, ps)
+
+        x1.eliminate_zeros()
+
+        tmp = np.diff(x1.indptr)
+        tmp_index = np.where(tmp==tmp.max())[0][0]
+
+        print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
+
+        sparse.save_npz(fn, x1.T)
+
+
+
+
+
+#find_cutoff = find_cutoff_col
 find_cutoff = find_cutoff_col_mg
 #find_cutoff = find_cutoff_row_mg
 
@@ -3682,7 +3759,10 @@ def pruning(qry, tmp_path=None, prune=1/4e3, S=1100, R=1400, cpu=1):
     N = max([max(map(int, elem)) for elem in Ns]) + 1
 
     # find the threshold
-    xys = [[[a, b, tmp_path, prune, S, R] for b in xrange(N)] for a in xrange(N)]
+    #xys = [[[a, b, tmp_path, prune, S, R] for b in xrange(N)] for a in xrange(N)]
+
+    xys = [[[b, a, tmp_path, prune, S, R] for b in xrange(N)] for a in xrange(N)]
+
     if cpu <= 1 or len(xys) <= 1:
         cutoff = map(find_cutoff, xys)
     else:
@@ -5581,6 +5661,11 @@ def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
     row_sum = np.asarray(z.sum(0), 'float32')[0]
     norm_dat = z.data / row_sum.take(z.indices, mode='clip')
     #z.data[norm_dat < prune] = 0 
+
+    #P = int(1./prune) + 1
+    #print 'element_fk_P', prune, P
+    #select_jit(z.indices, z.indptr, z.data, S=P)
+
     z.eliminate_zeros()
 
     nnz = z.nnz
@@ -5927,8 +6012,15 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
     # remove element < prune
     row_sum = np.asarray(z.sum(0), 'float32')[0]
     norm_dat = z.data / row_sum.take(z.indices, mode='clip')
-    #z.data[norm_dat < prune] = 0 
+
+    #z.data[norm_dat < prune] = 0
+    #P = int(1./prune) + 1
+    #print 'element_fk_P', prune, P
+    #select_jit(z.indices, z.indptr, z.data, S=P)
+
     z.eliminate_zeros()
+
+
 
     nnz = z.nnz
     xyn = tmp_path + '/' + str(xi) + '_' + str(yi) + '.npz'
@@ -9013,7 +9105,7 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
         #a, b, c = xt.indices, xt.indptr, xt.data
         #select_jit(a, b, c, S=P)
         print 'sdiv_fk_S', prune, P
-        select_jit(xt.indices, xt.indptr, xt.data, S=P)
+        #select_jit(xt.indices, xt.indptr, xt.data, S=P)
 
         if order == 'c':
             x = xt.T
@@ -9096,7 +9188,7 @@ def rsdiv(parameters, row_sum=None, dtype='float32', order='c'):
 
 
         a, b, c = xt.indices, xt.indptr, xt.data
-        select_jit(a, b, c, S=P)
+        #select_jit(a, b, c, S=P)
         if order == 'c':
             x = xt.T
         else:
