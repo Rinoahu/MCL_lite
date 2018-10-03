@@ -6021,7 +6021,7 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
     #z.data[norm_dat < prune] = 0
     P = int(1./prune) + 1
     #print 'element_fk_P', prune, P
-    select_jit(z.indices, z.indptr, z.data, S=P)
+    #select_jit(z.indices, z.indptr, z.data, S=P)
 
     z.eliminate_zeros()
 
@@ -6091,7 +6091,7 @@ def relement(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.
 
     P = int(1./prune) + 1
     #print 'element_fk_P', prune, P
-    select_jit(z.indices, z.indptr, z.data, S=P)
+    #select_jit(z.indices, z.indptr, z.data, S=P)
 
 
     z.eliminate_zeros()
