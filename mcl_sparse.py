@@ -3193,7 +3193,7 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1000000):
     print 'csrmg_jit_size_fk', len(a0), len(b0), len(c0), len(a1), len(b1), len(c1), S
     n = b0.size
     #nnz = min(a0.size + a1.size, b0.size*S)
-    nnz = a0.size + a1.size
+    nnz = c0.size + c1.size
     a2, b2, c2 = np.empty(nnz, a0.dtype), np.empty(n, b0.dtype), np.empty(nnz, c0.dtype)
     b2[0] = 0
     ptr = 0
@@ -3242,7 +3242,7 @@ def csrmg_jit(a0, b0, c0, a1, b1, c1, S=1000000):
             end = ptr_mg + M
 
         else:
-            pass
+            end = ptr_mg
 
         #print 'csrmg_jit_while_fk_end', ln_mg, ptr_mg, p0, ed0, p1, ed1
 
