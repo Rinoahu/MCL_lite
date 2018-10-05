@@ -11155,10 +11155,18 @@ def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=140
     # reorder matrix
     #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=False, block=block, cpu=cpu)
     # norm
-    fns, cvg, nnz = rnorm(qry, shape, tmp_path, csr=False, cpu=cpu, check=True, rgl=True, prune=prune)
+    #fns, cvg, nnz = rnorm(qry, shape, tmp_path, csr=False, cpu=cpu, check=True, rgl=True, prune=prune)
+    fns, cvg, nnz = rnorm(qry, shape, tmp_path, csr=False, cpu=cpu, check=False, rgl=False, prune=prune)
+
 
     #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
     pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
+
+    # change name to Mg
+    for i in os.listdir(tmp_path):
+        if i.endswith('.npz'):
+            j = tmp_path + '/' + i
+            os.system('cp %s %s_Mg.npz'%(j, j))
 
     # print 'finish norm', cvg
     # expension
