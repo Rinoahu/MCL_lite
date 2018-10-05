@@ -10995,7 +10995,15 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
         f = open(tmp_path + '_dict.pkl', 'rb')
         q2n = cPickle.load(f)
         N = len(q2n)
-        os.system('rm %s/*new* %s/*old'%(tmp_path, tmp_path))
+        #os.system('rm %s/*new* %s/*old'%(tmp_path, tmp_path))
+        for tmp in os.listdir(tmp_path):
+            if tmp.endswith('_old'):
+                a_tmp = tmp_path + '/' + tmp
+                b_tmp = tmp_path + '/' + tmp.split('_old')[0]
+                os.system('mv %s %s'%(a_tmp, b_tmp))
+
+        os.system('rm %s/*new*'%tmp_path)
+
         f.close()
 
 
