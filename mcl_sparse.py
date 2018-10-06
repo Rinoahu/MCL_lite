@@ -3865,6 +3865,9 @@ def find_cutoff_col_mg(elems):
             print 'csrmerge_fk', 1./P, S, R
             x0 = csrmerge(x0, x1, P, S, R)
 
+    if type(x0) == type(None):
+        return []
+
     x0.eliminate_zeros()
     #print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
     print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max()
