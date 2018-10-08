@@ -2536,7 +2536,7 @@ def mat_split8(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtyp
 
 
 # breaks the input network into smaller ones
-def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000):
+def mat_split9(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -2723,6 +2723,166 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     #q2n = mat_reorder(qry, q2n, shape, False, tmp_path)
 
     return q2n, block
+
+
+
+
+# breaks the input network into smaller ones
+def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=6000):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+
+    os.system('mkdir -p %s' % tmp_path)
+    q2n = {}
+    lines = 0
+    if mimetypes.guess_type(qry)[1] == 'gzip':
+        f = gzip.open(qry, 'r')
+    elif mimetypes.guess_type(qry)[1] == 'bzip2':
+        f = bz2.BZ2File(qry, 'r')
+    else:
+        f = open(qry, 'r')
+
+    for i in f:
+        lines += 1
+        j = i[:-1].split('\t')
+        if len(j) == 3:
+            qid, sid, score = j[:3]
+        elif len(j) > 3:
+            qid, sid, score = j[1:4]
+        else:
+            continue
+
+        if qid not in q2n:
+            q2n[qid] = None
+        if sid not in q2n:
+            q2n[sid] = None
+
+    f.close()
+
+    #np.random.seed(42)
+    #np.random.shuffle(qid_set)
+    N = len(q2n)
+
+    # update chunk
+    print 'memory limit', mem
+    blk0 = N * prune * 12 * 50 / mem / 1e9
+    blk1 = (N * prune * cpu * 6e2 / mem / 1e9) ** .5
+    chunk = N * prune / blk1
+    block0 = int(N / blk0) + 1
+    block1 = int(N / blk1) + 1
+    block = (block0 + block1) // 2
+
+    print 'the new chunck size', N, cpu, mem, blk0, blk1, block
+    shape = (N, N)
+    #diag = [0] * N
+
+    flag = 0
+    for i in q2n:
+        q2n[i] = flag
+        flag += 1
+
+    gc.collect()
+
+    eye = [0] * N
+    _os = {}
+
+    if mimetypes.guess_type(qry)[1] == 'gzip':
+        f = gzip.open(qry, 'r')
+    elif mimetypes.guess_type(qry)[1] == 'bzip2':
+        f = bz2.BZ2File(qry, 'r')
+    else:
+        f = open(qry, 'r')
+
+    pairs = {}
+    flag = 0
+    for i in f:
+        j = i[:-1].split('\t')
+        if len(j) == 3:
+            qid, sid, score = j[:3]
+        elif len(j) > 3:
+            qid, sid, score = j[1:4]
+        else:
+            continue
+
+        z = abs(float(score))
+        x, y = map(q2n.get, [qid, sid])
+        out = pack('fff', *[x, y, z])
+        xi, yi = x // block, y // block
+
+        try:
+            pairs[(xi, yi)].append(out)
+        except:
+            pairs[(xi, yi)] = [out]
+
+        eye[x] += z
+        if sym == False:
+            eye[y] += z
+            # sym
+            out = pack('fff', *[y, x, z])
+            try:
+                pairs[(yi, xi)].append(out)
+            except:
+                pairs[(yi, xi)] = [out]
+            flag += 1
+
+        flag += 1
+        # write batch to disk
+        if flag % 10000000 == 0:
+            for key, val in pairs.iteritems():
+                if len(val) > 0:
+                    a, b = key
+                    _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+                    _o.writelines(val)
+                    _o.close()
+                    pairs[key] = []
+                else:
+                    continue
+
+    f.close()
+
+    for key, val in pairs.iteritems():
+        if len(val) > 0:
+            a, b = key
+            _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+            _o.writelines(val)
+            _o.close()
+            pairs[key] = []
+        else:
+            continue
+
+    # set eye of matrix:
+    for i in xrange(N):
+        z = eye[i]
+        out = pack('fff', *[i, i, z])
+        j = i // block
+        try:
+            pairs[(j, j)].append(out)
+        except:
+            pairs[(j, j)] = [out]
+
+    for key, val in pairs.iteritems():
+        if len(val) > 0:
+            a, b = key
+            _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+            _o.writelines(val)
+            _o.close()
+            pairs[key] = []
+        else:
+            continue
+
+    # reorder the matrix
+    #print 'reorder the matrix'
+    #q2n = mat_reorder(qry, q2n, shape, False, tmp_path)
+
+    return q2n, block
+
+
+
+
+
+
+
 
 
 
