@@ -1,5 +1,7 @@
 #!usr/bin/env python
-import scipy as np
+#import scipy as np
+import scipy as sp
+import numpy as np
 from scipy import sparse
 from scipy.sparse import csgraph
 from scipy import stats
@@ -2735,7 +2737,7 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     os.system('mkdir -p %s' % tmp_path)
     q2n = {}
     lines = 0
-    max_score = 0
+    min_score = 0
     if mimetypes.guess_type(qry)[1] == 'gzip':
         f = gzip.open(qry, 'r')
     elif mimetypes.guess_type(qry)[1] == 'bzip2':
@@ -2753,7 +2755,7 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
         else:
             continue
 
-        max_score = max(max_score, float(score))
+        min_score = min(min_score, float(score))
 
         if qid not in q2n:
             q2n[qid] = None
@@ -2766,8 +2768,8 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     #np.random.shuffle(qid_set)
     N = len(q2n)
     #factor = scale and 1e9 / N / max_score or 1
-    factor = min(scale and 1e2 / max_score or 1, scale and 1e9 / N / max_score or 1)
-
+    #factor = scale and 1e2 / max_score or 1
+    factor = 1
 
     # update chunk
     print 'memory limit', mem
@@ -3728,8 +3730,6 @@ def find_cutoff_row_mg(elems):
             #x0 = csrmerge(x0, x1, S)
             x0 = csrmerge(x0, x1, p, S, R)
 
-
-
     print 'max_diff', np.diff(x0.indptr).max(), x0.nnz, x0.indptr
     ps = find_lower(x0.indptr, x0.data, prune=p, S=S, R=R)
 
@@ -3998,9 +3998,7 @@ def find_cutoff_col(elems):
 
 
 
-
-
-def find_cutoff_col_mg(elems):
+def find_cutoff_col_mg0(elems):
     if len(elems) <= 0:
         return []
     x0 = None
@@ -4079,6 +4077,98 @@ def find_cutoff_col_mg(elems):
 
 
 
+def find_cutoff_col_mg(elems):
+    if len(elems) <= 0:
+        return []
+    x0 = None
+    rowsum = None
+    colsum = None
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #b, a = a, b
+        print 'cutoff_ab_fk', a, b, elems
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            xtmp = sparse.load_npz(fn)
+            x1 = xtmp.T.tocsr()
+
+        except:
+            print 'max_fn', fn
+            continue
+
+        # sort x1
+        csrsort(x1)
+        #try:
+        #    colsum += x1.sum(0)
+        #except:
+        #    colsum = x1.sum(0)
+
+
+        print 'csrsorting', x1.nnz
+        # merge with x0
+        if type(x0) == type(None):
+            x0 = x1
+        else:
+            #x0 = csrmerge(x0, x1, S)
+            print 'csrmerge_fk', 1./P, S, R
+            x0 = csrmerge(x0, x1, P, S, R)
+
+    if type(x0) == type(None):
+        return []
+
+    x0.eliminate_zeros()
+    #print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
+    print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max()
+
+    #print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max(), rowsum.max(), colsum.max()
+    #x0t = x0.T
+    #ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
+    ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R, order=True, Pct=.9)
+
+    sq = None
+    mx_c = None
+    # prune
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #a, a = a, b
+        fn = tmp_path + '/%d_%d.npz'%(a, b)
+        try:
+            #xtmp = sparse.load_npz(fn).T
+            #x1 = xtmp.tocsr()
+            x1 = sparse.load_npz(fn).T.tocsr()
+
+        except:
+            continue
+        # remove small element
+        #print 'before_before_prune', x1.nnz, 'before_max_row', np.diff(x1.indptr).max(), 1./P, S, R
+        rm_elem(x1.indptr, x1.data, ps)
+
+        x1.eliminate_zeros()
+
+        tmp = np.diff(x1.indptr)
+        tmp_index = np.where(tmp==tmp.max())[0][0]
+
+        #print 'after_prune_fk', tmp.max(), (ps > 0).sum(), x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index, ps[tmp_index]
+
+        x2 = x1.T.tocsr()
+        #sparse.save_npz(fn, x1.T.tocsr())
+        sparse.save_npz(fn, x2)
+        if type(sq) == type(mx_c) == type(None):
+            sq = x2.power(2).sum(0)
+            mx_c = x2.max(0).todense()[0]
+        else:
+            sq += x2.power(2).sum(0)
+            mx_i = x2.max(0).todense()[0]
+            mx_c = np.max([mx_c, mx_i], 0)
+
+    #chaos = np.nan_to_num(mx_c/sq).max()
+    chaos = (mx_c - sq).max()
+
+    return chaos 
+
+
+
+
 
 
 #find_cutoff = find_cutoff_col
@@ -4102,7 +4192,7 @@ def pruning(qry, tmp_path=None, prune=1/4e3, S=1100, R=1400, cpu=1):
     if cpu <= 1 or len(xys) <= 1:
         cutoff = map(find_cutoff, xys)
     else:
-        zns = Parallel(n_jobs=cpu)(delayed(find_cutoff)(elem) for elem in xys)
+        cutoff = Parallel(n_jobs=cpu)(delayed(find_cutoff)(elem) for elem in xys)
 
         #pool = mp.Pool(cpu)
         #cutoff = pool.map(find_cutoff, xys)
@@ -4111,7 +4201,7 @@ def pruning(qry, tmp_path=None, prune=1/4e3, S=1100, R=1400, cpu=1):
         #del pool
         #gc.collect()
 
-
+    return max(cutoff)
 
 # split row block and col block into row_col block
 def preprocess(qry, tmp_path=None):
@@ -11334,8 +11424,7 @@ def mcl8(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=
 
 
 # add memory usage limit
-#def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
-def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+def mcl9(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
 
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
@@ -11411,6 +11500,163 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
         #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
         pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
 
+
+        if nnz < chunk / 4 and len(fns) > cpu ** 2:
+        #if nnz < chunk / 4 or nnz <= N:
+            print 'we try to merge 4 block into one', nnz, chunk/4
+            row_sum_new, fns_new, nnz_new, merged = merge_submat(fns, shape, csr=True, cpu=cpu)
+            #row_sum_new, fns_new, nnz_new, merged = merge_submat(fns, shape, csr=True)
+            if merged:
+                row_sum, fns, nnz = row_sum_new, fns_new, nnz_new
+            else:
+                print 'we failed to merge'
+        else:
+            print 'current max nnz is', nnz, chunk, chunk/4
+
+        if cvg:
+            # print 'yes, convergency'
+            break
+
+    # get connect components
+    '''
+    print 'construct from graph', fns
+    g = load_matrix(fns[0], shape, True)
+    cs = csgraph.connected_components(g)
+    for fn in fns[1:]:
+        g = load_matrix(fn, shape, True)
+        ci = csgraph.connected_components(g)
+        cs = merge_connected(cs, ci)
+
+    del g
+    gc.collect()
+    '''
+
+    g = load_matrix(fns[0], shape, True)
+    #cs = csgraph.connected_components(g)
+    for fn in fns[1:]:
+        g += load_matrix(fn, shape, True)
+        #ci = csgraph.connected_components(g)
+        #cs = merge_connected(cs, ci)
+
+    cs = csgraph.connected_components(g)
+    del g
+    gc.collect()
+
+
+
+    # print 'find components', cs
+    # load q2n
+    f = open(tmp_path + '_dict.pkl', 'rb')
+    q2n = cPickle.load(f)
+    f.close()
+    os.system('rm %s_dict.pkl'%tmp_path)
+
+    groups = {}
+    for k, v in q2n.iteritems():
+        c = cs[1][v]
+        try:
+            groups[c].append(k)
+        except:
+            groups[c] = [k]
+
+    del c
+    gc.collect()
+    if outfile and type(outfile) == str:
+        _o = open(outfile, 'w')
+    for v in groups.itervalues():
+        out =  '\t'.join(v)
+        if outfile == None:
+            print out
+        else:
+            _o.writelines([out, '\n'])
+    if outfile and type(outfile) == str:
+        _o.close()
+
+
+
+
+#def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4):
+
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    if rsm == False:
+        os.system('mkdir -p %s' % tmp_path)
+        os.system('rm -rf %s/*' % tmp_path)
+
+        q2n, block = mat_split(qry, tmp_path=tmp_path, chunk=chunk, cpu=cpu, sym=sym, mem=mem)
+
+        N = len(q2n)
+
+        # save q2n to disk
+        print 'saving q2n to disk'
+        _o = open(tmp_path + '_dict.pkl', 'wb')
+        cPickle.dump(q2n, _o, cPickle.HIGHEST_PROTOCOL)
+        _o.close()
+
+        del q2n
+        gc.collect()
+    else:
+        f = open(tmp_path + '_dict.pkl', 'rb')
+        q2n = cPickle.load(f)
+        N = len(q2n)
+        #os.system('rm %s/*new* %s/*old'%(tmp_path, tmp_path))
+        for tmp in os.listdir(tmp_path):
+            if tmp.endswith('_old'):
+                a_tmp = tmp_path + '/' + tmp
+                b_tmp = tmp_path + '/' + tmp.split('_old')[0]
+                os.system('mv %s %s'%(a_tmp, b_tmp))
+
+        os.system('rm %s/*new*'%tmp_path)
+
+        f.close()
+
+
+    #prune = min(prune, 100. / N)
+    shape = (N, N)
+    # reorder matrix
+    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=False, block=block, cpu=cpu)
+    # norm
+    fns, cvg, nnz = norm(qry, shape, tmp_path, csr=False, cpu=cpu, prune=prune, diag=False)
+
+    #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+    chaos = pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
+
+    # print 'finish norm', cvg
+    # expension
+    for i in xrange(itr):
+        print '#iteration', i
+        # row_sum, fns = expend(qry, shape, tmp_path, True, prune=prune,
+        # cpu=cpu)
+        #row_sum, fns = expend(qry, shape, tmp_path, True, I, prune, cpu)
+        #if i > 0 and i % (check * 2) == 0:
+        #    #q2n, row_sum, fns, nnz = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True)
+        #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True, block=block)
+        #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True)
+
+        if i == 0:
+            row_sum, fns, nnz = expand(qry, shape, tmp_path, True, I, prune, cpu, fast=True)
+        else:
+            row_sum, fns, nnz = expand(qry, shape, tmp_path, True, I, prune, cpu)
+
+        #if i > check and i % check == 0:
+        #    print 'reorder the matrix'
+        #    fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, check=True, cpu=cpu, prune=prune)
+        #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True, block=block, cpu=cpu)
+        #else:
+        #    #os.system('rm %s/*.npz_old'%tmp_path)
+        #    fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu, prune=prune)
+
+        fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu, prune=prune)
+
+
+        #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+        chaos = pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
+
+        print 'current_chaos', i, chaos
+        if chaos < 1e-3 and i > 5:
+            break
 
         if nnz < chunk / 4 and len(fns) > cpu ** 2:
         #if nnz < chunk / 4 or nnz <= N:
