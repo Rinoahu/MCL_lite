@@ -2727,7 +2727,7 @@ def mat_split9(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtyp
 
 
 # split adj matrix
-def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, scale=False):
+def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, scale=True):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -2765,7 +2765,8 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     #np.random.seed(42)
     #np.random.shuffle(qid_set)
     N = len(q2n)
-    factor = scale and 1e9 / N / max_score or 1
+    #factor = scale and 1e9 / N / max_score or 1
+    factor = min(scale and 1e2 / max_score or 1, scale and 1e9 / N / max_score or 1)
 
 
     # update chunk
