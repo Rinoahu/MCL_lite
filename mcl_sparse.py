@@ -11625,6 +11625,7 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
     chaos = pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
 
     # print 'finish norm', cvg
+    changed = 0
     # expension
     for i in xrange(itr):
         print '#iteration', i
@@ -11653,11 +11654,14 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
 
 
         #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+        chao_old = chaos
         chaos = pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
+        changed = abs(chaos - chao_old) < 1e-9 and changed + 1 or 0
+        print 'current_chaos', i, chaos, chao_old
 
-        print 'current_chaos', i, chaos
-        if chaos < 1e-3 and i > 5:
+        if chaos < 1e-3 or changed >= 5:
             break
+
 
         if nnz < chunk / 4 and len(fns) > cpu ** 2:
         #if nnz < chunk / 4 or nnz <= N:
