@@ -2765,7 +2765,7 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     #np.random.seed(42)
     #np.random.shuffle(qid_set)
     N = len(q2n)
-    factor = 1e9 / max_score
+    factor = 1e9 / N / max_score
 
 
     # update chunk
@@ -2867,7 +2867,7 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     # set eye of matrix:
     for i in xrange(N):
         #break
-        z = eye[i]
+        z = eye[i] + 1
         #z = 1
         out = pack('fff', *[i, i, z])
         j = i // block
