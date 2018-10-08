@@ -2790,7 +2790,7 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     #del qn
     gc.collect()
 
-    #eye = [0] * N
+    eye = [0] * N
     _os = {}
 
     if mimetypes.guess_type(qry)[1] == 'gzip':
@@ -2834,10 +2834,10 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
                 pairs[(yi, xi)] = [out]
             flag += 1
 
-        #if eye[x] < z:
-        #    eye[x] = z
-        #if eye[y] < z:
-        #    eye[y] = z
+        if eye[x] < z:
+            eye[x] = z
+        if eye[y] < z:
+            eye[y] = z
 
         flag += 1
         # write batch to disk
@@ -2867,8 +2867,8 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     # set eye of matrix:
     for i in xrange(N):
         #break
-        #z = eye[i]
-        z = 1
+        z = eye[i]
+        #z = 1
         out = pack('fff', *[i, i, z])
         j = i // block
         try:
