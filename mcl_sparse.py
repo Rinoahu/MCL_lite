@@ -6499,7 +6499,7 @@ def relement(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.
 
     z = bmerge(zs, cpu=cpu)
     #z = bmerge_disk(zs, cpu=cpu)
-    print 'breakpoint', zs, z
+    #print 'breakpoint', zs, z
     #raise SystemExit()
     if type(z) == type(None):
         #print 'return_none_z'
@@ -11733,7 +11733,7 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
 
 
 # regularized MCL
-def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=65, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4, rgl=True):
+def rmcl0(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=65, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4, rgl=True):
 
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
@@ -11960,6 +11960,8 @@ def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=140
             os.system('cp %s %s_Mg.npz'%(j, j))
 
     # print 'finish norm', cvg
+    changed = 0
+
     # expension
     for i in xrange(itr):
         print '#iteration', i
@@ -11988,9 +11990,12 @@ def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=140
 
         fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu, prune=prune)
         #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+        chao_old = chaos
         chaos = pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
+        changed = chaos == chao_old and changd + 1 or 0
         print 'current_chaos', i, chaos
-        if chaos < 1e-3:
+
+        if chaos < 1e-3 or changed >= 5:
             break
 
         if nnz < chunk / 4 and len(fns) > cpu ** 2:
