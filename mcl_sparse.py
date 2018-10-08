@@ -2845,6 +2845,8 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
             for key, val in pairs.iteritems():
                 if len(val) > 0:
                     a, b = key
+                    if a == b:
+                        continue
                     _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
                     _o.writelines(val)
                     _o.close()
@@ -2857,6 +2859,8 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     for key, val in pairs.iteritems():
         if len(val) > 0:
             a, b = key
+            if a == b:
+                continue
             _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
             _o.writelines(val)
             _o.close()
