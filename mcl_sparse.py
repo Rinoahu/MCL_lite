@@ -11993,7 +11993,7 @@ def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=140
         chao_old = chaos
         chaos = pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
         changed = chaos == chao_old and changed + 1 or 0
-        print 'current_chaos', i, chaos
+        print 'current_chaos', i, chaos, chao_old
 
         if chaos < 1e-3 or changed >= 5:
             break
