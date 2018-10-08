@@ -6085,7 +6085,10 @@ def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
     z.eliminate_zeros()
 
     # remove element < prune
-    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.sum(0), 'float32')[0]
+    row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+
+
     norm_dat = z.data / row_sum.take(z.indices, mode='clip')
     #z.data[norm_dat < prune] = 0 
 
@@ -6157,7 +6160,9 @@ def relement_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True,
     z.eliminate_zeros()
 
     # remove element < prune
-    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.sum(0), 'float32')[0]
+    row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+
     norm_dat = z.data / row_sum.take(z.indices, mode='clip')
     #z.data[norm_dat < prune] = 0 
 
@@ -6442,7 +6447,10 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
     z.eliminate_zeros()
 
     # remove element < prune
-    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.sum(0), 'float32')[0]
+    row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+
+
     #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
 
     #z.data[norm_dat < prune] = 0
@@ -6512,7 +6520,10 @@ def relement(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.
     z.eliminate_zeros()
 
     # remove element < prune
-    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.sum(0), 'float32')[0]
+    row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+
+
     #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
     #z.data[norm_dat < prune] = 0
 
@@ -8231,7 +8242,10 @@ def prsum(fns):
             continue
 
         try:
-            row_sum += tmp
+            #row_sum += tmp
+            idx = row_sum < tmp
+            row_sum[idx] = tmp[idx]
+            #row_sum = np.sum([row_sum, tmp], 0) 
         except:
             row_sum = tmp
 
