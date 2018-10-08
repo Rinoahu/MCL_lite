@@ -2727,7 +2727,7 @@ def mat_split9(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtyp
 
 
 # split adj matrix
-def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000):
+def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, scale=True):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -2735,6 +2735,7 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     os.system('mkdir -p %s' % tmp_path)
     q2n = {}
     lines = 0
+    max_score = 0
     if mimetypes.guess_type(qry)[1] == 'gzip':
         f = gzip.open(qry, 'r')
     elif mimetypes.guess_type(qry)[1] == 'bzip2':
@@ -2752,6 +2753,8 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
         else:
             continue
 
+        max_score = max(max_score, float(score))
+
         if qid not in q2n:
             q2n[qid] = None
         if sid not in q2n:
@@ -2762,6 +2765,8 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     #np.random.seed(42)
     #np.random.shuffle(qid_set)
     N = len(q2n)
+    factor = 1e9 / max_score
+
 
     # update chunk
     print 'memory limit', mem
@@ -2807,6 +2812,9 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
             continue
 
         z = abs(float(score))
+        if scale:
+            z *= factor
+
         x, y = map(q2n.get, [qid, sid])
         out = pack('fff', *[x, y, z])
         xi, yi = x // block, y // block
