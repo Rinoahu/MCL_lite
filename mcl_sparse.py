@@ -2875,7 +2875,7 @@ def mat_split(qry, step=4, chunk=5*10**7, tmp_path=None, cpu=4, sym=False, dtype
     for i in xrange(N):
         #break
         #z = eye[i] + 1
-        z = eye[i]
+        z = 0 < eye[i] and eye[i] or 1
         #z = 1
         out = pack('fff', *[i, i, z])
         j = i // block
@@ -4160,7 +4160,9 @@ def find_cutoff_col_mg(elems):
         else:
             sq += x2.power(2).sum(0)
             mx_i = x2.max(0).todense()[0]
-            mx_c = np.max([mx_c, mx_i], 0)
+            #mx_c = np.max([mx_c, mx_i], 0)
+            idx = mx_c < mx_i
+            mx_c[idx] = mx_i[idx]
 
     #chaos = np.nan_to_num(mx_c/sq).max()
     chaos = (mx_c - sq).max()
@@ -6085,8 +6087,8 @@ def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
     z.eliminate_zeros()
 
     # remove element < prune
-    #row_sum = np.asarray(z.sum(0), 'float32')[0]
-    row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
 
 
     norm_dat = z.data / row_sum.take(z.indices, mode='clip')
@@ -6160,8 +6162,8 @@ def relement_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True,
     z.eliminate_zeros()
 
     # remove element < prune
-    #row_sum = np.asarray(z.sum(0), 'float32')[0]
-    row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
 
     norm_dat = z.data / row_sum.take(z.indices, mode='clip')
     #z.data[norm_dat < prune] = 0 
@@ -6447,8 +6449,8 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
     z.eliminate_zeros()
 
     # remove element < prune
-    #row_sum = np.asarray(z.sum(0), 'float32')[0]
-    row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
 
 
     #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
@@ -6520,8 +6522,8 @@ def relement(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.
     z.eliminate_zeros()
 
     # remove element < prune
-    #row_sum = np.asarray(z.sum(0), 'float32')[0]
-    row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
 
 
     #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
@@ -8242,9 +8244,9 @@ def prsum(fns):
             continue
 
         try:
-            #row_sum += tmp
-            idx = row_sum < tmp
-            row_sum[idx] = tmp[idx]
+            row_sum += tmp
+            #idx = row_sum < tmp
+            #row_sum[idx] = tmp[idx]
             #row_sum = np.sum([row_sum, tmp], 0) 
         except:
             row_sum = tmp
@@ -9632,6 +9634,9 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
             x += dia
 
         x.data /= row_sum.take(x.indices, mode='clip')
+        x.data = np.nan_to_num(x.data)
+
+
         print 'max_x_data_fk', x.data.max(), x.sum(0).max(), x.sum(1).max(), row_sum.max(), row_sum.min()
         #xt = load_matrix(fn, shape=shape, csr=csr).T
         #xt.data /= row_sum.take(xt.indices, mode='clip')
@@ -10340,8 +10345,12 @@ def norm(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rtol
                 x = load_matrix(i, shape=shape, csr=csr)
                 nnz = max(nnz, x.nnz)
                 y = np.asarray(x.sum(0))[0]
-                #y = np.asarray(x.sum(1).T)[0]
                 row_sum += y
+
+                #y = np.asarray(x.max(0))[0]
+                #idx = row_sum < y
+                #row_sum[idx] = y[idx]
+
                 del x
                 del y
                 gc.collect()
@@ -10421,8 +10430,12 @@ def rnorm(qry, shape=(10**8, 10**8), tmp_path=None, row_sum=None, csr=False, rto
                 x = load_matrix(i, shape=shape, csr=csr)
                 nnz = max(nnz, x.nnz)
                 y = np.asarray(x.sum(0))[0]
-                #y = np.asarray(x.sum(1).T)[0]
                 row_sum += y
+
+                #y = np.asarray(x.max(0))[0]
+                #idx = row_sum < y
+                #row_sum[idx] = y[idx]
+
                 del x
                 del y
                 gc.collect()
