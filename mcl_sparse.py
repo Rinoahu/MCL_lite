@@ -4155,11 +4155,11 @@ def find_cutoff_col_mg(elems):
         #sparse.save_npz(fn, x1.T.tocsr())
         sparse.save_npz(fn, x2)
         if type(sq) == type(mx_c) == type(None):
-            sq = x2.power(2).sum(0)
-            mx_c = x2.max(0).todense()[0]
+            sq = np.asarray(x2.power(2).sum(0))
+            mx_c = np.asarray(x2.max(0).todense())[0]
         else:
-            sq += x2.power(2).sum(0)
-            mx_i = x2.max(0).todense()[0]
+            sq += np.asarray(x2.power(2).sum(0))
+            mx_i = np.asarray(x2.max(0).todense())[0]
             #mx_c = np.max([mx_c, mx_i], 0)
             idx = mx_c < mx_i
             mx_c[idx] = mx_i[idx]
