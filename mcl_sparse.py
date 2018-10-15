@@ -11657,6 +11657,7 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
 
     #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
     #chaos = pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
+    chaos = 1e9
 
     # print 'finish norm', cvg
     changed = 0
