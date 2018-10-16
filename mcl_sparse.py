@@ -25,6 +25,14 @@ from threading import Thread
 from sklearn.externals.joblib import Parallel, delayed
 
 
+import mmap
+try:
+	from _numpypy import multiarray as npy
+except:
+	npy = np
+
+
+
 try:
     import sharedmem as sm
 except:
@@ -100,6 +108,54 @@ else:
 
     def csrgeam_ez(x, y, clf=None):
         return x+y
+
+
+
+# mmap based array
+class darray:
+
+	def __init__(self, fn, size, dtype='float32'):
+		self.fn = fn
+		self.size = int(size)
+		self.dtype = dtype
+		if self.dtype == 'float8' or self.dtype == 'int8':
+			self.stride = 1
+		elif self.dtype == 'float16' or self.dtype == 'int16':
+			self.stride = 2
+		elif self.dtype == 'float32' or self.dtype == 'int32':
+			self.stride = 4
+		else:
+			self.stride = 8
+
+		self.size = size
+
+		self.f = open(self.fn, "w+b")
+		self.f.seek(self.stride * self.size - 1)
+		self.f.write('\x00')
+		self.f.flush()
+
+		self.buf = mmap.mmap(self.f.fileno(), self.stride * self.size, prot=mmap.ACCESS_WRITE)
+		self.dat = npy.frombuffer(self.buf, self.dtype)
+
+
+	# resize the array
+	def resize(self, size=-1):
+		L = size > 0 and size * self.stride - 1 or self.stride * (self.dat.size + 10**6) - 1
+		L = int(L)
+		self.f.seek(L)
+		self.f.write('\x00')
+		self.f.close()
+		self.f = open(self.fn, "r+b")
+		L += 1
+		self.buf = mmap.mmap(self.f.fileno(), L, prot=mmap.ACCESS_WRITE)
+		self.dat = npy.frombuffer(self.buf, self.dtype)
+
+
+
+
+
+
+
 
 
 
