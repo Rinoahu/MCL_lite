@@ -118,6 +118,7 @@ class darray:
 		self.fn = fn
 		self.size = int(size)
 		self.dtype = dtype
+
 		if self.dtype == 'float8' or self.dtype == 'int8':
 			self.stride = 1
 		elif self.dtype == 'float16' or self.dtype == 'int16':
