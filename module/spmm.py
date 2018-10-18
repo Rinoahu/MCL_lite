@@ -12,16 +12,25 @@ import gzip
 import bz2 as bzip2
 import bz2
 from itertools import izip
-from scipy import sparse as sps
+#from scipy import sparse as sps
 import tempfile
 import cPickle
 import mmap
 try:
     from _numpypy import multiarray as npy
 except:
-    npy = np
+    import numpy as npy
+#import numpy as npy
 
+try:
+    from numba import njit
+except:
+    njit = lambda x: x
 
+from array import array
+#import math
+from random import random
+from time import time
 
 # mmap based array
 class darray:
@@ -49,6 +58,8 @@ class darray:
 
         self.buf = mmap.mmap(self.f.fileno(), self.stride *
                              self.size, prot=mmap.ACCESS_WRITE)
+
+        #print 'buf length', len(self.buf), size, len(self.buf) / self.stride
         self.dat = npy.frombuffer(self.buf, self.dtype)
 
     # resize the array
@@ -121,4 +132,136 @@ def csrmm(x0, y0, z0, x1, y1, z1, z2n='tmp'):
         x2[x2_ptr] = z2_ptr
         x2_ptr += 1
 
+
+class nd:
+    def __init__(self, shape, dtype='f'):
+        self.shape = shape
+        if dtype == 'float32':
+            self.dtype = 'f'
+        elif dtype == 'float64':
+            self.dtype = 'd'
+        else:
+            self.dtype = dtype
+        N = 1
+        for i in shape:
+            N *= i
+        self.N = N
+        self.data = [array(dtype, [0]) * self.shape[1] for elem in xrange(shape[0])]
+
+    def __getitem__(self, (i, j)):
+        return self.data[i][j]
+
+    def __setitem__(self, (i, j), v):
+        self.data[i][j] = v
+
+    def shape(self):
+        return shape
+
+
+def vec(x, y):
+    n = len(x)
+    d = 0
+    for i in xrange(n):
+        d += x[i] * y[i]
+    return d
+
+
+def dot(x, y):
+    r, d = x.shape
+    #r, d = len(x), len(x[1])
+    d, c = y.shape
+    #d, c = len(y), len(y[1])
+
+    #z = npy.empty((r, c), dtype='float32')
+    #z = [array('d', [0]) * c for elem in xrange(r)]
+    z = nd((r, c), 'd')
+    for i in xrange(r):
+        for k in xrange(d):
+            xik = x.data[i][k]
+            #xik = x[i][k]
+            zi = z.data[i]
+            yk = y.data[k]
+            for j in xrange(c):
+                #z[i][j] += xik * y[k][j]
+                #z[i, j] += xik * y[k, j]
+                #ori = z[i, j]
+                #orj = zi[j]
+                zi[j] += xik * yk[j]
+                #z.data[i][j] += xik * y.data[k][j]
+                #if z[i, j] != zi[j]:
+                #    print 'fuckyou'
+                #else:
+                #    print z[i, j], zi[j], ori, orj
+
+                #z[i][j] += x[i][k] * y[k][j]
+
+    return z
+
+@njit
+def ndot(x, y):
+    r, d = x.shape
+    #r, d = len(x), len(x[1])
+    d, c = y.shape
+    #d, c = len(y), len(y[1])
+
+    z = npy.empty((r, c), dtype=x.dtype)
+    #z = nd((r, c), 'float32')
+    for i in xrange(r):
+        for k in xrange(d):
+            #xik = x[i, k]
+            #xik = x[i][k]
+            #zi = z[i]
+            #yk = y[k]
+            for j in xrange(c):
+                z[i, j] += x[i, k] * y[k, j]
+                #z[i, j] += xik * y[k, j]
+                #zi[j] += xik * yk[j]
+
+    return z
+
+
+
+if __name__ == '__main__':
+    n = int(eval(sys.argv[1]))
+    #x = darray('test.npy', n)
+    try:
+        x = npy.random.randn(n, n)
+        x.astype('float32')
+        #z = npy.empty((n, n), dtype='float32')
+        st = time()
+        ndot(x, x)
+        print 'numba jit', time() - st
+
+
+    except:
+        '''
+        x = []
+        for i in xrange(n):
+            elem = array('f')
+            #elem = []
+            for j in xrange(n):
+                elem.append(random())
+            x.append(elem)
+        '''
+        #x = npy.empty((n, n), dtype='float32')
+        x = nd((n, n))
+        for i in xrange(n):
+            for j in xrange(n):
+                x[i,j] = random()
+      
+        #z = [array('d', [0])*n for elem in xrange(n)]
+        #z = [[0]*n for elem in xrange(n)]
+
+        st = time()
+        dot(x, x)
+
+        '''
+        x = npy.empty((n, n), dtype='float32')
+        z = npy.empty((n, n), dtype='float32')
+
+        st = time()
+        ndot(x, x, z)
+        '''
+
+        print 'pypy', time() - st
 

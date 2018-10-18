@@ -549,6 +549,160 @@ def csrmm_msav2(xr, xc, x, yr, yc, y, visit):
     return zr, zc[:zptr], z[:zptr], flag
 
 
+
+# memory saved version
+@njit(fastmath=True, nogil=True, cache=True)
+def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z, visit):
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    chk = x.size + y.size
+    #nnz = chk
+    #nnz = min(max(int(1. * x.size * y.size / (D - 1)), chk * 33), chk * 50)
+    nnz = z.size
+    #print 'nnz size', chk, nnz
+    #zr, zc, z = np.zeros(R, xr.dtype), np.empty(nnz, xc.dtype), np.empty(nnz, dtype=x.dtype)
+    data = np.zeros(D - 1, dtype=x.dtype)
+
+    #zr = np.zeros(R, xr.dtype)
+    #zc = np.asarray(np.memmap('zc_tmp.npy', mode='w', shape=nnz,  dtype=xc.dtype))
+    #z = np.asarray(np.memmap('zc_tmp.npy', mode='w', shape=nnz, dtype=x.dtype))
+    #fq = np.memmap('zc_tmp.npy', mode='w', shape=nnz, dtype=x.dtype)
+
+
+    # print 'zr init', zr[:5], zc[:5], z[:5]
+
+    # hash table
+    #visit = np.zeros(yr.size, 'int8')
+    #index = np.zeros(yr.size, yr.dtype)
+    index = np.zeros(yr.size, yr.dtype)
+    flag = 0
+    zptr = 0
+    for i in xrange(R - 1):
+
+        # get ith row of a
+        kst, ked = xr[i], xr[i + 1]
+        if kst == ked:
+            zr[i + 1] = zr[i]
+            continue
+
+        i_sz = index.size
+        ks = 0
+        nz = 0
+        for k in xrange(kst, ked):
+            x_col, x_val = xc[k], x[k]
+            # get row of b
+            jst, jed = yr[x_col], yr[x_col + 1]
+            if jst == jed:
+                continue
+
+            nz += jed - jst
+            flag += 2
+            for j in xrange(jst, jed):
+                # for j in prange(jst, jed):
+                y_col, y_val = yc[j], y[j]
+                # print 'before', ks, len(index), i_sz
+                y_col_val = data[y_col] + x_val * y_val
+                if y_col_val != 0:
+                    if ks < i_sz:
+                        index[ks] = y_col
+                    else:
+                        i_sz += (jed - jst) * 2
+                        index = resize(index, i_sz)
+                        index[ks] = y_col
+                    ks += 1
+                    flag += 2
+
+                data[y_col] = y_col_val
+                flag += 3
+                # print 'end', ks, len(index), i_sz
+
+            #print(k, jst, jed, len(yr))
+
+        zend = zr[i] + nz
+        if zend > nnz:
+            print'resize estimate', nnz, nnz + chk * 15, nnz * R / i
+            #nnz = max(chk+nnz, R/i*nnz)
+            nnz += chk * 15
+
+            #print('resize sparse matrix', n_size)
+            zc = resize(zc, nnz)
+            z = resize(z, nnz)
+            flag += 2
+
+        for pt in xrange(ks):
+            # for pt in prange(ks):
+            y_col = index[pt]
+            #mx_col = max(mx_col, idx)
+            y_col_val = data[y_col]
+            if y_col_val != 0:
+                zc[zptr], z[zptr] = y_col, y_col_val
+                zptr += 1
+                data[y_col] = 0
+                flag += 3
+
+            flag += 1
+
+        zr[i + 1] = zptr
+    print 'the zptr', zptr
+    return zr, zc[:zptr], z[:zptr], flag
+
+
+def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
+    np.nan_to_num(a.data, False)
+    np.nan_to_num(b.data, False)
+
+    xr, xc, x = a.indptr, a.indices, a.data
+    yr, yc, y = b.indptr, b.indices, b.data
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    chk = x.size + y.size
+    nnz = chk
+    nnz = min(max(int(1. * x.size * y.size / (D - 1)), chk * 33), chk * 50)
+
+    zr = np.zeros(R, xr.dtype)
+    zc = np.asarray(np.memmap('zc_tmp.npy', mode='w+', shape=nnz,  dtype=xc.dtype))
+    z = np.asarray(np.memmap('z_tmp.npy', mode='w+', shape=nnz, dtype=x.dtype))
+
+
+
+    print 'a nnz', a.nnz, 'b nnz', b.nnz
+    st = time()
+    # if cpu > 1 and x.size > 5e8:
+    #    csrmm = csrmm_sp
+    # if cpu > 1 and x.size < 5e8:
+    # if cpu > 1:
+    csrmm = csrmm_ms
+
+    nnzs = x.size + y.size
+    visit = np.zeros(yr.size, 'int8')
+    zr, zc, z, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
+
+    #if type(z) != type(None):
+    #    zmtx = sps.csr_matrix((z, zc, zr), shape=(a.shape[0], b.shape[1]))
+    #else:
+    #    zmtx = sps.csr_matrix((a.shape[0], b.shape[1]), dtype=a.dtype)
+
+    shape = (a.shape[0], b.shape[1])
+    zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+    #zmtx.indtpr, zmtx.indice, zmtx.data = zr, zc, z
+    zmtx = sps.csr_matrix((z, zc, zr), shape=shape)
+
+    return zmtx
+
+
+
+
+
+
+
+
+
+
+
+
+
 # parallel version of csrmm
 #@njit(fastmath=True, nogil=True, cache=True)
 @njit(nogil=True, cache=True, fastmath=True)
@@ -767,6 +921,9 @@ def csrmm_ez0(a, b, mm='msav', cpu=1):
     return zmtx
 
 
+
+
+
 def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     np.nan_to_num(a.data, False)
     np.nan_to_num(b.data, False)
@@ -786,6 +943,8 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
         csrmm = csrmm_msav
     elif mm == 'ori':
         csrmm = csrmm_ori
+    elif mm == 'ms':
+        csrmm = csrmm_ms
     else:
         raise SystemExit()
 
@@ -4309,12 +4468,12 @@ def find_cutoff_col_mg(elems):
         # remove small element
         # print 'before_before_prune', x1.nnz, 'before_max_row',
         # np.diff(x1.indptr).max(), 1./P, S, R
-        rm_elem(x1.indptr, x1.data, ps)
+        rm_elem(x1.indptr, x1.data, ps, -1)
 
         x1.eliminate_zeros()
 
-        tmp = np.diff(x1.indptr)
-        tmp_index = np.where(tmp == tmp.max())[0][0]
+        #tmp = np.diff(x1.indptr)
+        #tmp_index = np.where(tmp == tmp.max())[0][0]
 
         # print 'after_prune_fk', tmp.max(), (ps > 0).sum(),
         # x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index,
@@ -4371,11 +4530,12 @@ def find_cutoff_col_mg_fast(elems):
         #    tmp = x2
 
         # remove small element
-        if type(PS) == type(None):
-            PS = np.empty(x2.size)
+        #if type(PS) == type(None):
+        #    PS = np.empty(x2.size)
 
-        rm_elem(x2.indptr, x2.data, PS, P)
+        #rm_elem(x2.indptr, x2.data, PS, P)
 
+        x2.data[x2.data<P] = 0
         x2.eliminate_zeros()
 
         #tmp = np.diff(x1.indptr)
@@ -4476,6 +4636,8 @@ def pruning(qry, tmp_path=None, prune=1 / 4e3, S=1100, R=1400, cpu=1, fast=False
 
     if fast:
         find_cutoff = find_cutoff_col_mg_fast
+    else:
+        find_cutoff = find_cutoff_col_mg
 
     xys = [[[b, a, tmp_path, prune, S, R]
             for b in xrange(N)] for a in xrange(N)]
@@ -9869,6 +10031,7 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
 
         x.data /= row_sum.take(x.indices, mode='clip')
         x.data = np.nan_to_num(x.data)
+        #x.data[x.data < prune] = 0
 
         print 'max_x_data_fk', x.data.max(), x.sum(0).max(), x.sum(1).max(), row_sum.max(), row_sum.min()
         #xt = load_matrix(fn, shape=shape, csr=csr).T
@@ -9906,8 +10069,6 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
         #x.data = np.asarray(x.data, dtype=dtype)
 
         print 'norm before nnz', x.nnz, fn
-
-        x.data[x.data < prune] = 0
 
         x.eliminate_zeros()
         print 'norm after nnz', x.nnz, fn
@@ -12265,7 +12426,8 @@ def rmcl(qry, tmp_path=None, xy=[], I=1.5, prune=1 / 4e3, select=1100, recover=1
         changed = abs(chaos - chao_old) < 1e-9 and changed + 1 or 0
         print 'current_chaos', i, chaos, chao_old
 
-        if chaos < 1e-3 or changed >= 5:
+        #if chaos < 1e-3 or changed >= 5:
+        if chaos < 1e-3:
             break
 
         if nnz < chunk / 4 and len(fns) > cpu ** 2:
