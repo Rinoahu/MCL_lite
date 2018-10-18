@@ -3684,7 +3684,7 @@ def find_lower(indptr, data, prune=1 / 4e3, S=1100, R=1400, order=True, Pct=.9):
 
 # remove element by give threshold
 @njit(cache=True)
-def rm_elem(indptr, data, prune):
+def rm_elem0(indptr, data, prune):
 
     N = (data > 0).sum()
     # print 'before_prune_rm'
@@ -3700,6 +3700,71 @@ def rm_elem(indptr, data, prune):
     Nw = (data > 0).sum()
     print 'after_prune_rm', N, Nw
     # print 'after_prune_rm', (data>0).sum(), (prune>0).sum()
+
+
+# find the threshold of prune by row
+def find_cutoff_row_mg(elems):
+    if len(elems) <= 0:
+        return []
+    x0 = None
+    for elem in elems:
+        a, b, tmp_path, p, S, R = elem
+        fn = tmp_path + '/%d_%d.npz' % (a, b)
+        try:
+            x1 = sparse.load_npz(fn)
+        except:
+            continue
+
+        # sort x1
+        csrsort(x1)
+        print 'csrsorting'
+        # merge with x0
+        if type(x0) == type(None):
+            x0 = x1
+        else:
+            #x0 = csrmerge(x0, x1, S)
+            x0 = csrmerge(x0, x1, p, S, R)
+
+    print 'max_diff', np.diff(x0.indptr).max(), x0.nnz, x0.indptr
+    ps = find_lower(x0.indptr, x0.data, prune=p, S=S, R=R)
+
+    # prune
+    for elem in elems:
+        a, b, tmp_path, p, S, R = elem
+        fn = tmp_path + '/%d_%d.npz' % (a, b)
+        try:
+            x1 = sparse.load_npz(fn)
+        except:
+            continue
+        # remove small element
+        print 'before_before_prune', x1.nnz
+        rm_elem(x1.indptr, x1.data, ps)
+
+        x1.eliminate_zeros()
+        sparse.save_npz(fn, x1)
+
+
+
+
+@njit(cache=True)
+def rm_elem(indptr, data, prune, p1=-1):
+    if p1 > 0:
+        data[data<p1] = 0
+    else:
+        N = (data > 0).sum()
+        # print 'before_prune_rm'
+        n = indptr.size
+        for i in xrange(n - 1):
+            st, ed = indptr[i:i + 2]
+            row = data[st:ed]
+            p = prune[i]
+            row[row < p] = 0
+
+            #print (row<p).sum(), row.size
+
+        Nw = (data > 0).sum()
+        print 'after_prune_rm', N, Nw
+        # print 'after_prune_rm', (data>0).sum(), (prune>0).sum()
 
 
 # find the threshold of prune by row
@@ -4063,7 +4128,8 @@ def find_cutoff_col_mg0(elems):
         sparse.save_npz(fn, x1.T.tocsr())
 
 
-def find_cutoff_col_mg(elems):
+
+def find_cutoff_col_mg1(elems):
     if len(elems) <= 0:
         return []
     x0 = None
@@ -4163,13 +4229,210 @@ def find_cutoff_col_mg(elems):
     return chaos
 
 
+
+def find_cutoff_col_mg(elems):
+    if len(elems) <= 0:
+        return 1
+    x0 = None
+    x1 = None
+    rowsum = None
+    colsum = None
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #b, a = a, b
+        print 'cutoff_ab_fk', a, b, elems
+        fn = tmp_path + '/%d_%d.npz' % (a, b)
+        try:
+            xtmp = sparse.load_npz(fn)
+            xtmp = xtmp.T.tocsr()
+        except:
+            print 'max_fn', fn
+            continue
+
+        if type(x1) != type(None):
+            x1 += xtmp
+        else:
+            x1 = xtmp
+
+        if x1.nnz >= 1e8:
+            # sort x1
+            csrsort(x1)
+            print 'csrsorting', x1.nnz
+            # merge with x0
+            if type(x0) == type(None):
+                x0 = x1
+            else:
+                #x0 = csrmerge(x0, x1, S)
+                print 'csrmerge_fk', 1. / P, S, R
+                x0 = csrmerge(x0, x1, P, S, R)
+
+            x1 = None
+
+    if type(x1) != type(None):
+        # sort x1
+        csrsort(x1)
+        print 'csrsorting', x1.nnz
+        # merge with x0
+        if type(x0) == type(None):
+            x0 = x1
+        else:
+            #x0 = csrmerge(x0, x1, S)
+            print 'csrmerge_fk', 1. / P, S, R
+            x0 = csrmerge(x0, x1, P, S, R)
+
+    if type(x0) == type(None):
+        return 1
+
+    x0.eliminate_zeros()
+    # print 'max_diff_fk', np.diff(x0.indptr).max(), x0.nnz, x0.indptr[:100]
+    print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max()
+
+    # print 'max_x_mg', x0.sum(0).max(), x0.sum(1).max(), rowsum.max(), colsum.max()
+    #x0t = x0.T
+    #ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R)
+    ps = find_lower(x0.indptr, x0.data, prune=P, S=S, R=R, order=True, Pct=.9)
+
+    sq = None
+    mx_c = None
+    # prune
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #a, a = a, b
+        fn = tmp_path + '/%d_%d.npz' % (a, b)
+        try:
+            #xtmp = sparse.load_npz(fn).T
+            #x1 = xtmp.tocsr()
+            x1 = sparse.load_npz(fn).T.tocsr()
+
+        except:
+            continue
+        # remove small element
+        # print 'before_before_prune', x1.nnz, 'before_max_row',
+        # np.diff(x1.indptr).max(), 1./P, S, R
+        rm_elem(x1.indptr, x1.data, ps)
+
+        x1.eliminate_zeros()
+
+        tmp = np.diff(x1.indptr)
+        tmp_index = np.where(tmp == tmp.max())[0][0]
+
+        # print 'after_prune_fk', tmp.max(), (ps > 0).sum(),
+        # x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index,
+        # ps[tmp_index]
+
+        x2 = x1.T.tocsr()
+        #sparse.save_npz(fn, x1.T.tocsr())
+        sparse.save_npz(fn, x2)
+        if type(sq) == type(mx_c) == type(None):
+            #sq = np.asarray(x2.power(2).sum(0))
+            sq = x2.power(2).sum(0)
+            #mx_c = np.asarray(x2.max(0).todense())[0]
+            mx_c = x2.max(0).todense()
+
+        else:
+            #sq += np.asarray(x2.power(2).sum(0))
+            sq += x2.power(2).sum(0)
+            #mx_i = np.asarray(x2.max(0).todense())[0]
+            mx_i = x2.max(0).todense()
+
+            mx_c = np.max([mx_c, mx_i], 0)
+            #idx = mx_c < mx_i
+            #mx_c[idx] = mx_i[idx]
+
+    #chaos = np.nan_to_num(mx_c/sq).max()
+    chaos = (mx_c - sq).max()
+
+    return chaos
+
+
+
+def find_cutoff_col_mg_fast(elems):
+    if len(elems) <= 0:
+        return 1
+    # prune
+    PS = None
+    sq = None
+    mx_c = None
+    #tmp = None
+    for elem in elems:
+        a, b, tmp_path, P, S, R = elem
+        #print 'fast_a_b', a, b
+        #a, a = a, b
+        fn = tmp_path + '/%d_%d.npz' % (a, b)
+        try:
+            x2 = sparse.load_npz(fn)
+
+        except:
+            continue
+
+        #try:
+        #    tmp += x2
+        #except:
+        #    tmp = x2
+
+        # remove small element
+        if type(PS) == type(None):
+            PS = np.empty(x2.size)
+
+        rm_elem(x2.indptr, x2.data, PS, P)
+
+        x2.eliminate_zeros()
+
+        #tmp = np.diff(x1.indptr)
+        #tmp_index = np.where(tmp == tmp.max())[0][0]
+
+        # print 'after_prune_fk', tmp.max(), (ps > 0).sum(),
+        # x1[tmp_index].data,  len(x1[tmp_index].data), ps.shape, tmp_index,
+        # ps[tmp_index]
+
+        #x2 = x1
+        #sparse.save_npz(fn, x1.T.tocsr())
+        sparse.save_npz(fn, x2)
+        if type(sq) == type(mx_c) == type(None):
+            #sq = np.asarray(x2.power(2).sum(0))
+            sq = x2.power(2).sum(0)
+            #mx_c = np.asarray(x2.max(0).todense())[0]
+            mx_c = x2.max(0).todense()
+
+        else:
+            #sq += np.asarray(x2.power(2).sum(0))
+            sq += x2.power(2).sum(0)
+            #mx_i = np.asarray(x2.max(0).todense())[0]
+            mx_i = x2.max(0).todense()
+
+            mx_c = np.max([mx_c, mx_i], 0)
+            #idx = mx_c < mx_i
+            #mx_c[idx] = mx_i[idx]
+
+    #chaos = np.nan_to_num(mx_c/sq).max()
+    chaos = (mx_c - sq).max()
+    #tmp = mx_c - sq
+    #idx = np.where(tmp == chaos)
+    #print 'rm_elem_P_chaos', P, chaos, mx_c[idx], sq[idx], idx, mx_c, b
+    #print 'rm_elem_P_chaos', P, chaos, idx, mx_c, a, b
+
+    #tmp1 = tmp.power(2).sum(0)
+    #tmp2 = tmp.max(0)
+    #print 'rm_elem_max', tmp1[tmp1>0].min()
+    #print 'rm_elem_max', (tmp2-tmp1).max(), (tmp1-sq).max(), (tmp2-mx_c).max()
+
+    return chaos
+
+
+
+
+
+
+
+
+
 #find_cutoff = find_cutoff_col
 find_cutoff = find_cutoff_col_mg
 #find_cutoff = find_cutoff_row_mg
 
 
 # prune
-def pruning(qry, tmp_path=None, prune=1 / 4e3, S=1100, R=1400, cpu=1):
+def pruning0(qry, tmp_path=None, prune=1 / 4e3, S=1100, R=1400, cpu=1):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -4197,6 +4460,34 @@ def pruning(qry, tmp_path=None, prune=1 / 4e3, S=1100, R=1400, cpu=1):
         # gc.collect()
 
     return max(cutoff)
+
+
+
+def pruning(qry, tmp_path=None, prune=1 / 4e3, S=1100, R=1400, cpu=1, fast=False):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    Ns = [elem.split('.')[0].split('_')
+          for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
+    N = max([max(map(int, elem)) for elem in Ns]) + 1
+
+    # find the threshold
+    #xys = [[[a, b, tmp_path, prune, S, R] for b in xrange(N)] for a in xrange(N)]
+
+    if fast:
+        find_cutoff = find_cutoff_col_mg_fast
+
+    xys = [[[b, a, tmp_path, prune, S, R]
+            for b in xrange(N)] for a in xrange(N)]
+
+    if cpu <= 1 or len(xys) <= 1:
+        cutoff = map(find_cutoff, xys)
+    else:
+        cutoff = Parallel(n_jobs=cpu)(delayed(find_cutoff)(elem)
+                                      for elem in xys)
+
+    return max(cutoff)
+
 
 # split row block and col block into row_col block
 
@@ -11628,11 +11919,12 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1 / 4e3, select=1100, recover=14
         #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
         chao_old = chaos
         chaos = pruning(qry, tmp_path, prune=prune,
-                        S=select, R=recover, cpu=cpu)
+                        S=select, R=recover, cpu=cpu, fast=True)
         changed = abs(chaos - chao_old) < 1e-9 and changed + 1 or 0
         print 'current_chaos', i, chaos, chao_old
 
-        if chaos < 1e-3 or changed >= 5:
+        #if chaos < 1e-3 or changed >= 5:
+        if chaos < 1e-3:
             break
 
         if nnz < chunk / 4 and len(fns) > cpu ** 2:
