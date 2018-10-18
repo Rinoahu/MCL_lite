@@ -9904,8 +9904,11 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
 
         # convert entries to 16 bit float
         #x.data = np.asarray(x.data, dtype=dtype)
+
         print 'norm before nnz', x.nnz, fn
-        #x.data[x.data < prune] = 0
+
+        x.data[x.data < prune] = 0
+
         x.eliminate_zeros()
         print 'norm after nnz', x.nnz, fn
 
