@@ -668,14 +668,26 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     nnz = chk
     nnz = min(max(int(1. * x.size * y.size / (D - 1)), chk * 33), chk * 50)
 
+    if prefix == None:
+        #tmpfn = tempfile.mktemp('tmp', dir='./tmp/')
+        tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
+    else:
+        #tmpfn = tempfile.mktemp(prefix, dir=tmp_path)
+        tmpfn = prefix
+
+    print 'the_tmpfn_fk', tmp_path, prefix
+
+
+
+
     zr = np.zeros(R, xr.dtype)
 
     #zc = np.asarray(np.memmap('zc_tmp.npy', mode='w+', shape=nnz,  dtype=xc.dtype))
-    zc = np.memmap('zc_tmp.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
+    zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
 
     #z = np.asarray(np.memmap('z_tmp.npy', mode='w+', shape=nnz, dtype=x.dtype))
-    z = np.memmap('z_tmp.npy', mode='w+', shape=nnz, dtype=x.dtype)
-
+    z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
 
 
     print 'a nnz', a.nnz, 'b nnz', b.nnz
@@ -6663,7 +6675,7 @@ def relement_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True,
 
 
 # bmat
-def bkmat(xyns, cpu=1):
+def bkmat0(xyns, cpu=1):
     print 'working on block mat', xyns
     z = None
     for xyn in xyns:
@@ -6687,6 +6699,90 @@ def bkmat(xyns, cpu=1):
             z = z0
     # print 'get z', z
     return z
+
+
+def bkmat1(xyns, cpu=1, ms=True):
+    print 'working on block mat', xyns
+    z = None
+    X = None
+    Y = None
+    for xyn in xyns:
+        xn, yn, shape, csr, tmp_path = xyn
+        try:
+            x = load_matrix(xn, shape=shape, csr=csr)
+            if xn == yn:
+                y = x
+            else:
+                y = load_matrix(yn, shape=shape, csr=csr)
+            print 'bkmat loading', xn, yn
+        except:
+            print 'not get', xn, yn
+            # return None
+            continue
+        if type(X) == type(None):
+            X = x
+        else:
+            X += x
+
+        if type(Y) == type(None):
+            Y = y
+        else:
+            Y += y
+
+    
+    try:
+        z = csrmm_ez_ms(X, Y, tmp_path=tmp_path, cpu=1)
+    except:
+        z = None
+    # print 'get z', z
+    return z
+
+
+
+
+def bkmat(xyns, cpu=1, ms=True):
+    print 'working on block mat', xyns
+    z = None
+    X = None
+    Y = None
+    prefix = None
+    for xyn in xyns:
+        xn, yn, shape, csr, tmp_path, xi, yi = xyn
+        try:
+            x = load_matrix(xn, shape=shape, csr=csr)
+            if xn == yn:
+                y = x
+            else:
+                y = load_matrix(yn, shape=shape, csr=csr)
+            print 'bkmat loading', xn, yn
+        except:
+            print 'not get', xn, yn
+            # return None
+            continue
+        if type(X) == type(None):
+            X = x
+        else:
+            X += x
+
+        if type(Y) == type(None):
+            Y = y
+        else:
+            Y += y
+
+        prefix = tmp_path + '/' + str(xi) + '_' + str(yi)
+   
+    try:
+        prefix += tempfile.mkstemp()[1].split(os.sep)[-1]
+    except:
+        pass
+
+    try:
+        z = csrmm_ez_ms(X, Y, prefix=prefix, tmp_path=tmp_path, cpu=1)
+    except:
+        z = None
+    # print 'get z', z
+    return z
+
 
 
 def badd0(xy):
@@ -6882,7 +6978,7 @@ def bmerge_disk(zs, cpu=1):
 
 
 # processing entry blocks one by one
-def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1 / 4e3, cpu=1):
+def element5(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1 / 4e3, cpu=1):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -6949,7 +7045,10 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
     return row_sum_n, xyn, nnz
 
 
-def relement(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1 / 4e3, cpu=1):
+
+
+
+def relement0(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1 / 4e3, cpu=1):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -7014,6 +7113,287 @@ def relement(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.
     gc.collect()
 
     return row_sum_n, xyn, nnz
+
+
+
+def element6(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1 / 4e3, cpu=1):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    xr = yc = z = None
+    xyn = [[] for elem in xrange(cpu)]
+    for i in xrange(d):
+        xn = tmp_path + '/' + str(xi) + '_' + str(i) + '.npz'
+        yn = tmp_path + '/' + str(i) + '_' + str(yi) + '.npz'
+        # print 'xi', xi, 'yi', yi
+        if os.path.isfile(xn) and os.path.isfile(yn):
+            #xyn.append([xn, yn, shape, csr])
+            xyn[i % cpu].append([xn, yn, shape, csr, tmp_path])
+            print 'in_bkt', i, cpu, i % cpu
+
+    xyn = [elem for elem in xyn if elem]
+
+    print 'compute_element_cpu', cpu
+    print 'parallel_bmat', xyn[0], len(xyn)
+    #zs = bmat(xyns, cpu)
+    # if cpu <= 1:
+    # if 1:
+    #    zs = map(bkmat, xyn)
+    # else:
+    #    zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+    if len(xyn) > 1 and cpu > 1:
+        zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+    else:
+        zs = map(bkmat, xyn)
+
+    z = bmerge(zs, cpu=cpu)
+    #z = bmerge_disk(zs, cpu=cpu)
+    # print 'breakpoint', zs, z
+    #raise SystemExit()
+    if type(z) == type(None):
+        # print 'return_none_z'
+        return None, None, None
+    # else:
+    #    z = zs_merge(zs)
+
+    z.data **= I
+    z.eliminate_zeros()
+
+    # remove element < prune
+    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+
+    #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
+
+    #z.data[norm_dat < prune] = 0
+    #P = int(1./prune) + 1
+    # print 'element_fk_P', prune, P
+    #select_jit(z.indices, z.indptr, z.data, S=P)
+
+    z.eliminate_zeros()
+
+    nnz = z.nnz
+    xyn = tmp_path + '/' + str(xi) + '_' + str(yi) + '.npz'
+    sparse.save_npz(xyn + '_new', z)
+    row_sum_n = tmp_path + '/' + str(xi) + '_' + str(yi) + '_rowsum.npz'
+    np.savez_compressed(row_sum_n, row_sum)
+    del z
+    gc.collect()
+
+    return row_sum_n, xyn, nnz
+
+
+
+
+
+def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1 / 4e3, cpu=1):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    xr = yc = z = None
+    xyn = [[] for elem in xrange(cpu)]
+    for i in xrange(d):
+        xn = tmp_path + '/' + str(xi) + '_' + str(i) + '.npz'
+        yn = tmp_path + '/' + str(i) + '_' + str(yi) + '.npz'
+        # print 'xi', xi, 'yi', yi
+        if os.path.isfile(xn) and os.path.isfile(yn):
+            #xyn.append([xn, yn, shape, csr])
+            xyn[i % cpu].append([xn, yn, shape, csr, tmp_path, xi, yi])
+            print 'in_bkt', i, cpu, i % cpu
+
+    xyn = [elem for elem in xyn if elem]
+
+    print 'compute_element_cpu', cpu
+    print 'parallel_bmat', xyn[0], len(xyn)
+    #zs = bmat(xyns, cpu)
+    # if cpu <= 1:
+    # if 1:
+    #    zs = map(bkmat, xyn)
+    # else:
+    #    zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+    if len(xyn) > 1 and cpu > 1:
+        zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+    else:
+        zs = map(bkmat, xyn)
+
+    z = bmerge(zs, cpu=cpu)
+    #z = bmerge_disk(zs, cpu=cpu)
+    # print 'breakpoint', zs, z
+    #raise SystemExit()
+    if type(z) == type(None):
+        # print 'return_none_z'
+        return None, None, None
+    # else:
+    #    z = zs_merge(zs)
+
+    z.data **= I
+    z.eliminate_zeros()
+
+    # remove element < prune
+    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+
+    #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
+
+    #z.data[norm_dat < prune] = 0
+    #P = int(1./prune) + 1
+    # print 'element_fk_P', prune, P
+    #select_jit(z.indices, z.indptr, z.data, S=P)
+
+    z.eliminate_zeros()
+
+    nnz = z.nnz
+    xyn = tmp_path + '/' + str(xi) + '_' + str(yi) + '.npz'
+    sparse.save_npz(xyn + '_new', z)
+    row_sum_n = tmp_path + '/' + str(xi) + '_' + str(yi) + '_rowsum.npz'
+    np.savez_compressed(row_sum_n, row_sum)
+    del z
+    gc.collect()
+
+    return row_sum_n, xyn, nnz
+
+
+def relement1(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1 / 4e3, cpu=1):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    xr = yc = z = None
+    xyn = [[] for elem in xrange(cpu)]
+    for i in xrange(d):
+        xn = tmp_path + '/' + str(xi) + '_' + str(i) + '.npz'
+        yn = tmp_path + '/' + str(i) + '_' + str(yi) + '.npz_Mg.npz'
+        # print 'xi', xi, 'yi', yi
+        if os.path.isfile(xn) and os.path.isfile(yn):
+            #xyn.append([xn, yn, shape, csr])
+            xyn[i % cpu].append([xn, yn, shape, csr, tmp_path])
+            print 'in_bkt', i, cpu, i % cpu
+
+    xyn = [elem for elem in xyn if elem]
+
+    print 'compute_element_cpu', cpu
+    print 'parallel_bmat', xyn[0], len(xyn)
+    #zs = bmat(xyns, cpu)
+    # if cpu <= 1:
+    # if 1:
+    #    zs = map(bkmat, xyn)
+    # else:
+    #    zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+    if len(xyn) > 1 and cpu > 1:
+        zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+    else:
+        zs = map(bkmat, xyn)
+
+    z = bmerge(zs, cpu=cpu)
+    #z = bmerge_disk(zs, cpu=cpu)
+    # print 'breakpoint', zs, z
+    #raise SystemExit()
+    if type(z) == type(None):
+        # print 'return_none_z'
+        return None, None, None
+    # else:
+    #    z = zs_merge(zs)
+
+    z.data **= I
+    z.eliminate_zeros()
+
+    # remove element < prune
+    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+
+    #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
+    #z.data[norm_dat < prune] = 0
+
+    #P = int(1./prune) + 1
+    # print 'element_fk_P', prune, P
+    #select_jit(z.indices, z.indptr, z.data, S=P)
+
+    z.eliminate_zeros()
+
+    nnz = z.nnz
+    xyn = tmp_path + '/' + str(xi) + '_' + str(yi) + '.npz'
+    sparse.save_npz(xyn + '_new', z)
+    row_sum_n = tmp_path + '/' + str(xi) + '_' + str(yi) + '_rowsum.npz'
+    np.savez_compressed(row_sum_n, row_sum)
+    del z
+    gc.collect()
+
+    return row_sum_n, xyn, nnz
+
+
+
+
+def relement(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1 / 4e3, cpu=1):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    xr = yc = z = None
+    xyn = [[] for elem in xrange(cpu)]
+    for i in xrange(d):
+        xn = tmp_path + '/' + str(xi) + '_' + str(i) + '.npz'
+        yn = tmp_path + '/' + str(i) + '_' + str(yi) + '.npz_Mg.npz'
+        # print 'xi', xi, 'yi', yi
+        if os.path.isfile(xn) and os.path.isfile(yn):
+            #xyn.append([xn, yn, shape, csr])
+            xyn[i % cpu].append([xn, yn, shape, csr, tmp_path, xi, yi])
+            print 'in_bkt', i, cpu, i % cpu
+
+    xyn = [elem for elem in xyn if elem]
+
+    print 'compute_element_cpu', cpu
+    print 'parallel_bmat', xyn[0], len(xyn)
+    #zs = bmat(xyns, cpu)
+    # if cpu <= 1:
+    # if 1:
+    #    zs = map(bkmat, xyn)
+    # else:
+    #    zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+    if len(xyn) > 1 and cpu > 1:
+        zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+    else:
+        zs = map(bkmat, xyn)
+
+    z = bmerge(zs, cpu=cpu)
+    #z = bmerge_disk(zs, cpu=cpu)
+    # print 'breakpoint', zs, z
+    #raise SystemExit()
+    if type(z) == type(None):
+        # print 'return_none_z'
+        return None, None, None
+    # else:
+    #    z = zs_merge(zs)
+
+    z.data **= I
+    z.eliminate_zeros()
+
+    # remove element < prune
+    row_sum = np.asarray(z.sum(0), 'float32')[0]
+    #row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
+
+    #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
+    #z.data[norm_dat < prune] = 0
+
+    #P = int(1./prune) + 1
+    # print 'element_fk_P', prune, P
+    #select_jit(z.indices, z.indptr, z.data, S=P)
+
+    z.eliminate_zeros()
+
+    nnz = z.nnz
+    xyn = tmp_path + '/' + str(xi) + '_' + str(yi) + '.npz'
+    sparse.save_npz(xyn + '_new', z)
+    row_sum_n = tmp_path + '/' + str(xi) + '_' + str(yi) + '_rowsum.npz'
+    np.savez_compressed(row_sum_n, row_sum)
+    del z
+    gc.collect()
+
+    return row_sum_n, xyn, nnz
+
+
+
+
+
+
+
 
 
 # use gpu to speed up
@@ -9041,6 +9421,9 @@ def expand(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=1 / 
                 os.system('mv %s_new.npz %s' % (fn, fn))
                 fns.append(fn)
 
+    # remove z_ms.npy zr_ms.npy
+    os.system('rm %s/*_z_ms.npy %s/*_zc_ms.npy'%(tmp_path, tmp_path))
+
     return row_sum, fns, nnz
 
 
@@ -9125,6 +9508,11 @@ def regularize(qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5, prune=
             if os.path.isfile(fn + '_new.npz'):
                 os.system('mv %s_new.npz %s' % (fn, fn))
                 fns.append(fn)
+
+
+    # remove z_ms.npy zr_ms.npy
+    os.system('rm %s/*_z_ms.npy %s/*_zc_ms.npy'%(tmp_path, tmp_path))
+
 
     return row_sum, fns, nnz
 
