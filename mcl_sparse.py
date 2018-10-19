@@ -693,7 +693,7 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
 
     # truncate
     print 'before truncate', zc.size, zptr
-    #zc.flush()
+    zc.flush()
     N = zptr * zc.strides[0]
     fn = zc.filename
     _dtype = zc.dtype
@@ -705,7 +705,7 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     print 'after truncate', zc.size, zptr
 
 
-    #z.flush()
+    z.flush()
     N = zptr * z.strides[0]
     fn = z.filename
     _dtype = z.dtype
