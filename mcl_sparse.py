@@ -691,6 +691,27 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     #Zr, Zc, Z, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
     zptr, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
 
+    # truncate
+    print 'truncate', zc.size, zptr
+    zc.flush()
+    N = zptr * zc.strides[0]
+    fn = zc.filename
+    del zc
+    f = open(fn, 'r+')
+    f.truncate(N)
+    f.close()
+    zc = memmap(fn, mode='r+', dtype=zc.dtype)
+
+
+    z.flush()
+    N = zptr * z.strides[0]
+    fn = z.filename
+    del z
+    f = open(fn, 'r+')
+    f.truncate(N)
+    f.close()
+    z = memmap(fn, mode='r+', dtype=z.dtype)
+
 
     #if type(z) != type(None):
     #    zmtx = sps.csr_matrix((z, zc, zr), shape=(a.shape[0], b.shape[1]))
