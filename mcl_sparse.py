@@ -696,22 +696,24 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     zc.flush()
     N = zptr * zc.strides[0]
     fn = zc.filename
+    _dtype = zc.dtype
     del zc
     f = open(fn, 'r+')
     f.truncate(N)
     f.close()
-    zc = np.memmap(fn, mode='r+', dtype=zc.dtype)
+    zc = np.memmap(fn, mode='r+', dtype=_dtype)
     print 'after truncate', zc.size, zptr
 
 
     z.flush()
     N = zptr * z.strides[0]
     fn = z.filename
+    _dtype = z.dtype
     del z
     f = open(fn, 'r+')
     f.truncate(N)
     f.close()
-    z = np.memmap(fn, mode='r+', dtype=z.dtype)
+    z = np.memmap(fn, mode='r+', dtype=_dtype)
 
 
     #if type(z) != type(None):
