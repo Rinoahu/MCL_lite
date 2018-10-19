@@ -564,6 +564,8 @@ def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z, visit):
     #zr, zc, z = np.zeros(R, xr.dtype), np.empty(nnz, xc.dtype), np.empty(nnz, dtype=x.dtype)
     data = np.zeros(D - 1, dtype=x.dtype)
 
+    visit1 = np.zeros(yr.size, dtype=x.dtype)
+
     #zr = np.zeros(R, xr.dtype)
     #zc = np.asarray(np.memmap('zc_tmp.npy', mode='w', shape=nnz,  dtype=xc.dtype))
     #z = np.asarray(np.memmap('zc_tmp.npy', mode='w', shape=nnz, dtype=x.dtype))
@@ -644,8 +646,13 @@ def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z, visit):
             flag += 1
 
         zr[i + 1] = zptr
+
+    #zr.flush()
+    #zc.flush()
+    #z.flush()
     print 'the zptr', zptr
-    return zr, zc[:zptr], z[:zptr], flag
+    #return zr, zc[:zptr], z[:zptr], flag
+    return zptr, flag
 
 
 def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
@@ -662,8 +669,12 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     nnz = min(max(int(1. * x.size * y.size / (D - 1)), chk * 33), chk * 50)
 
     zr = np.zeros(R, xr.dtype)
-    zc = np.asarray(np.memmap('zc_tmp.npy', mode='w+', shape=nnz,  dtype=xc.dtype))
-    z = np.asarray(np.memmap('z_tmp.npy', mode='w+', shape=nnz, dtype=x.dtype))
+
+    #zc = np.asarray(np.memmap('zc_tmp.npy', mode='w+', shape=nnz,  dtype=xc.dtype))
+    zc = np.memmap('zc_tmp.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
+
+    #z = np.asarray(np.memmap('z_tmp.npy', mode='w+', shape=nnz, dtype=x.dtype))
+    z = np.memmap('z_tmp.npy', mode='w+', shape=nnz, dtype=x.dtype)
 
 
 
@@ -677,26 +688,29 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
 
     nnzs = x.size + y.size
     visit = np.zeros(yr.size, 'int8')
-    zr, zc, z, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
+    #Zr, Zc, Z, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
+    zptr, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
+
 
     #if type(z) != type(None):
     #    zmtx = sps.csr_matrix((z, zc, zr), shape=(a.shape[0], b.shape[1]))
     #else:
     #    zmtx = sps.csr_matrix((a.shape[0], b.shape[1]), dtype=a.dtype)
 
+
+    #zc.flush()
+    #z.flush()
+
+
     shape = (a.shape[0], b.shape[1])
     zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
-    zmtx.indtpr, zmtx.indice, zmtx.data = zr, zc, z
+
+    zmtx.indptr, zmtx.indices, zmtx.data = zr[:zptr], zc[:zptr], z[:zptr]
     #zmtx = sps.csr_matrix((z, zc, zr), shape=shape)
+    #print 'Zr, Zc, Z is', zmtx.indptr, zmtx.indices, zmtx.data 
     zmtx.eliminate_zeros()
 
     return zmtx
-
-
-
-
-
-
 
 
 
