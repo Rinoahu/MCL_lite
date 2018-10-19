@@ -564,7 +564,7 @@ def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z, visit):
     #zr, zc, z = np.zeros(R, xr.dtype), np.empty(nnz, xc.dtype), np.empty(nnz, dtype=x.dtype)
     data = np.zeros(D - 1, dtype=x.dtype)
 
-    visit1 = np.zeros(yr.size, dtype=x.dtype)
+    #visit1 = np.zeros(yr.size, dtype=x.dtype)
 
     #zr = np.zeros(R, xr.dtype)
     #zc = np.asarray(np.memmap('zc_tmp.npy', mode='w', shape=nnz,  dtype=xc.dtype))
