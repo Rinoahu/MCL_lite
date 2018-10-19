@@ -3380,12 +3380,33 @@ def csrsort_jit(a, b, c):
     return flag
 
 
-def csrsort(x):
+# sort the col by value
+def csrsort0(x):
     a, b, c = x.indices, x.indptr, x.data
     flag = csrsort_jit(a, b, c)
     print 'sorting', flag, 'times'
     #x_s = sparse.csr_matrix((c, a, b), shape=x.shape, dtype=x.dtype)
     # return x_s
+
+
+
+# sort each row of csr matrix
+def csrsort(x, reverse=True):
+
+    if reverse:
+        idx = np.lexsort((-x.data, x.nonzero()[0]))
+    else:
+        idx = np.lexsort((x.data, x.nonzero()[0]))
+
+    x.data = x.data[idx]
+    x.indices = x.indices[idx]
+
+    return 1
+
+
+
+
+
 
 
 @njit(cache=True)
