@@ -708,7 +708,7 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     zmtx.indptr, zmtx.indices, zmtx.data = zr[:zptr], zc[:zptr], z[:zptr]
     #zmtx = sps.csr_matrix((z, zc, zr), shape=shape)
     #print 'Zr, Zc, Z is', zmtx.indptr, zmtx.indices, zmtx.data 
-    zmtx.eliminate_zeros()
+    #zmtx.eliminate_zeros()
 
     return zmtx
 
