@@ -729,7 +729,9 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     shape = (a.shape[0], b.shape[1])
     zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
 
-    zmtx.indptr, zmtx.indices, zmtx.data = zr[:zptr], zc[:zptr], z[:zptr]
+    #zmtx.indptr, zmtx.indices, zmtx.data = zr[:zptr], zc[:zptr], z[:zptr]
+    zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+
     #zmtx = sps.csr_matrix((z, zc, zr), shape=shape)
     #print 'Zr, Zc, Z is', zmtx.indptr, zmtx.indices, zmtx.data 
     #zmtx.eliminate_zeros()
