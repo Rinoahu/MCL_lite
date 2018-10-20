@@ -552,7 +552,7 @@ def csrmm_msav2(xr, xc, x, yr, yc, y, visit):
 
 # memory saved version
 @njit(fastmath=True, nogil=True, cache=True)
-def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z, visit):
+def csrmm_ms0(xr, xc, x, yr, yc, y, zr, zc, z, visit):
 
     R = xr.shape[0]
     D = yr.shape[0]
@@ -655,6 +655,95 @@ def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z, visit):
     return zptr, flag
 
 
+
+@njit(fastmath=True, nogil=True, cache=True)
+def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z):
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    chk = x.size + y.size
+    #nnz = chk
+    #nnz = min(max(int(1. * x.size * y.size / (D - 1)), chk * 33), chk * 50)
+    nnz = z.size
+    #print 'nnz size', chk, nnz
+    #zr, zc, z = np.zeros(R, xr.dtype), np.empty(nnz, xc.dtype), np.empty(nnz, dtype=x.dtype)
+    data = np.zeros(D - 1, dtype=x.dtype)
+    visit = np.zeros(yr.size, dtype=np.int8)
+    index = np.zeros(yr.size, yr.dtype)
+    flag = 0
+    zptr = 0
+    for i in xrange(R - 1):
+
+        # get ith row of a
+        kst, ked = xr[i], xr[i + 1]
+        if kst == ked:
+            zr[i + 1] = zr[i]
+            continue
+
+        i_sz = index.size
+        ks = 0
+        nz = 0
+        for k in xrange(kst, ked):
+            x_col, x_val = xc[k], x[k]
+            # get row of b
+            jst, jed = yr[x_col], yr[x_col + 1]
+            if jst == jed:
+                continue
+
+            nz += jed - jst
+            flag += 2
+            for j in xrange(jst, jed):
+                # for j in prange(jst, jed):
+                y_col, y_val = yc[j], y[j]
+                # print 'before', ks, len(index), i_sz
+                y_col_val = data[y_col] + x_val * y_val
+                if y_col_val != 0:
+                    if visit[y_col] == 0:
+                        index[ks] = y_col
+                        ks += 1
+                        visit[y_col] = 1
+                        flag += 2
+
+                    data[y_col] = y_col_val
+                    flag += 3
+                else:
+                    continue
+                # print 'end', ks, len(index), i_sz
+
+            #print(k, jst, jed, len(yr))
+
+        zend = zr[i] + nz
+        if zend > nnz:
+            print'resize estimate', nnz, nnz + chk * 15, nnz * R / i
+            #nnz = max(chk+nnz, R/i*nnz)
+            nnz += chk * 15
+
+            #print('resize sparse matrix', n_size)
+            zc = resize(zc, nnz)
+            z = resize(z, nnz)
+            flag += 2
+
+        for pt in xrange(ks):
+            # for pt in prange(ks):
+            y_col = index[pt]
+            #mx_col = max(mx_col, idx)
+            y_col_val = data[y_col]
+            if y_col_val != 0:
+                zc[zptr], z[zptr] = y_col, y_col_val
+                zptr += 1
+                data[y_col] = visit[y_col] = 0
+                flag += 3
+
+            flag += 1
+
+        zr[i + 1] = zptr
+
+    print 'the zptr hello', zptr
+    return zptr, flag
+
+
+
+
 def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     np.nan_to_num(a.data, False)
     np.nan_to_num(b.data, False)
@@ -699,9 +788,11 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     csrmm = csrmm_ms
 
     nnzs = x.size + y.size
-    visit = np.zeros(yr.size, 'int8')
+    #visit = np.zeros(yr.size, 'int8')
     #Zr, Zc, Z, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
-    zptr, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
+    #zptr, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
+    zptr, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z)
+
 
     # truncate
     print 'before truncate', zc.size, zptr

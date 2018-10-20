@@ -35,7 +35,7 @@ from time import time
 # mmap based array
 class darray:
 
-    def __init__(self, fn, size, dtype='float32'):
+    def __init__(self, fn, size, dtype='float32', chk=10**6):
         self.fn = fn
         self.size = int(size)
         self.dtype = dtype
@@ -55,6 +55,7 @@ class darray:
         self.f.seek(self.stride * self.size - 1)
         self.f.write('\x00')
         self.f.flush()
+        self.chk = chk
 
         self.buf = mmap.mmap(self.f.fileno(), self.stride *
                              self.size, prot=mmap.ACCESS_WRITE)
@@ -65,7 +66,7 @@ class darray:
     # resize the array
     def resize(self, size=-1):
         L = size > 0 and size * self.stride - \
-            1 or self.stride * (self.dat.size + 10**6) - 1
+            1 or self.stride * (self.dat.size + self.chk) - 1
         L = int(L)
         self.f.seek(L)
         self.f.write('\x00')
@@ -77,7 +78,7 @@ class darray:
 
 
 # a x b = z
-def csrmm(x0, y0, z0, x1, y1, z1, z2n='tmp'):
+def csrmm0(x0, y0, z0, x1, y1, z1, z2n='tmp'):
 
     R = x0.size
     C = (y0.size + y1.size) * 10
@@ -106,6 +107,78 @@ def csrmm(x0, y0, z0, x1, y1, z1, z2n='tmp'):
             for i1 in xrange(kst, ked):
                 j = y1[i1]
                 bkj = z1[i1]
+                zij = aik * bkj
+                row_i[j] += zij
+
+                if visit[j] == 0:
+                    key[i2] = j
+                    i2 += 1
+                    visit[j] = 1
+        # add to z
+        for i3 in xrange(i2):
+            j = key[i3]
+            zij = row_i[j]
+            if zij > 0:
+
+                if z2_ptr > z2.size:
+                    y2d.resize()
+                    z2d.resize()
+                    y2, z2 = x2d.dat, z2d.dat
+
+                y2[z2_ptr] = j
+                z2[z2_ptr] = zij
+                visit[j] = 0
+                z2_ptr += 1
+
+        x2[x2_ptr] = z2_ptr
+        x2_ptr += 1
+
+
+# int: int hash table
+class ht:
+    def __init__(self, size=100):
+        self.size = size
+        self.key = array('i', [0]) * self.size
+        self.value = array('i', [0]) * self.size
+        self.ptr = 0
+
+
+    def __getitem__(self, i):
+        self.value
+
+
+# a0 x a1
+def csrmm(r0, c0, d0, r1, c1, d1, fn='tmp'):
+    # r: row index 
+    # c: col index
+    # d: data
+
+    R = r0.size
+    C = (c0.size + c1.size) * 10
+    x2d = darray(fn + '_r.npz', R, dtype=x0.dtype)
+    y2d = darray(fn + '_c.npz', C, dtype=y0.dtype)
+    z2d = darray(fn + '_d.npz', C, dtype=z0.dtype)
+
+    r2, c2, d2 = x2d.dat, y2d.dat, z2d.dat
+    # values of ith row
+    di = npy.zeros(R, z0.dtype)
+
+    # set
+    visit = set()
+
+    for i in xrange(r0.size-1):
+        k00, k01 = r0[i:i+2]
+        if k00 == k01:
+            continue
+
+        for k0i in xrange(k00, k01):
+            k = c0[k0i]
+            a0ik = d0[k0i]
+
+            k10, k11 = r1[k:k+1]
+            for k1i in xrange(k10, k11):
+                j = c1[k1i]
+                a1kj = d1[k1i]
                 zij = aik * bkj
                 row_i[j] += zij
 
