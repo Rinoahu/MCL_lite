@@ -12682,7 +12682,8 @@ def mcl0(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=140
         #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True, block=block)
         #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True)
 
-        if i == 0:
+        #if i == 0:
+        if 1:
             row_sum, fns, nnz = expand(
                 qry, shape, tmp_path, True, I, prune, cpu, fast=True)
         else:
