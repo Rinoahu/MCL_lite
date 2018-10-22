@@ -6907,7 +6907,8 @@ def bkmat(xyns, cpu=1, ms=True):
     Y = None
     prefix = None
     for xyn in xyns:
-        xn, yn, shape, csr, tmp_path, xi, yi = xyn
+        #xn, yn, shape, csr, tmp_path, xi, yi = xyn
+        xn, yn, shape, csr, tmp_path, xi, yi, label = xyn
         try:
             x = load_matrix(xn, shape=shape, csr=csr)
             if xn == yn:
@@ -6929,7 +6930,7 @@ def bkmat(xyns, cpu=1, ms=True):
         else:
             Y += y
 
-        prefix = tmp_path + '/' + str(xi) + '_' + str(yi)
+        prefix = tmp_path + '/' + str(xi) + '_' + str(yi) + '_' + str(label) + '_'
    
     try:
         prefix += tempfile.mkstemp()[1].split(os.sep)[-1]
@@ -7358,7 +7359,8 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
         # print 'xi', xi, 'yi', yi
         if os.path.isfile(xn) and os.path.isfile(yn):
             #xyn.append([xn, yn, shape, csr])
-            xyn[i % cpu].append([xn, yn, shape, csr, tmp_path, xi, yi])
+            label = i % cpu
+            xyn[label].append([xn, yn, shape, csr, tmp_path, xi, yi, label])
             print 'in_bkt', i, cpu, i % cpu
 
     xyn = [elem for elem in xyn if elem]
@@ -7371,10 +7373,13 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
     #    zs = map(bkmat, xyn)
     # else:
     #    zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
+
     if len(xyn) > 1 and cpu > 1:
         zs = Parallel(n_jobs=cpu)(delayed(bkmat)(elem) for elem in xyn)
     else:
         zs = map(bkmat, xyn)
+
+    #zs = map(bkmat, xyn)
 
     z = bmerge(zs, cpu=cpu)
     #z = bmerge_disk(zs, cpu=cpu)
@@ -7408,6 +7413,11 @@ def element(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, I=1.5
     row_sum_n = tmp_path + '/' + str(xi) + '_' + str(yi) + '_rowsum.npz'
     np.savez_compressed(row_sum_n, row_sum)
     del z
+
+
+    tmpfn = tmp_path + '/' + str(xi) + '_' + str(yi) + '_*_*ms.npy'
+    os.system('rm %s'%tmpfn)
+
     gc.collect()
 
     return row_sum_n, xyn, nnz
@@ -12837,7 +12847,15 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
         #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True, block=block)
         #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True)
 
-        row_sum, fns, nnz = expand(qry, shape, tmp_path, True, I, prune, cpu, fast=True)
+        #row_sum, fns, nnz = expand(qry, shape, tmp_path, True, I, prune, cpu, fast=False)
+        if i == 0:
+            row_sum, fns, nnz = expand(
+                qry, shape, tmp_path, True, I, prune, cpu, fast=True)
+        else:
+            row_sum, fns, nnz = expand(
+                qry, shape, tmp_path, True, I, prune, cpu)
+
+
 
         # if i > check and i % check == 0:
         #    print 'reorder the matrix'
