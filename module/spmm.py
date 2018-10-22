@@ -516,9 +516,11 @@ if __name__ == '__main__':
         indice = np.memmap('./tests/indice.npz', dtype='int32')
         print type(indice)
         x = sparse.csr_matrix((data, indice, indptr))
-        print 'scipy'
 
         z0 = x * x
+        print 'scipy', z0.nnz
+
+
     except:
         data = memmap('./tests/data.npz', 'r+', dtype='float32')
         indptr = memmap('./tests/indptr.npz', 'r+', dtype='int32')
