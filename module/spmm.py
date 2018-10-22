@@ -33,6 +33,10 @@ from array import array
 from random import random
 from time import time
 
+
+
+
+
 # mmap based array
 class darray:
 
@@ -411,6 +415,21 @@ def csrmm(r0, c0, d0, r1, c1, d1, fn='tmp'):
     d2d.truncate(ptr)
 
     return r2d, c2d, d2d
+
+
+class csr_matrix:
+
+    def __init__(self, (data, indices, indptr), dtype='float32'):
+        self.data = data
+        self.indices = indices
+        self.indptr = indptr
+
+    def __mul__(self, y):
+        r, c, d = csrmm(self.indptr, self.indices ,self.data, x.indptr, x.indices, x.data)
+
+        return csr_matrix((d, c, r))
+
+
 
 
 
