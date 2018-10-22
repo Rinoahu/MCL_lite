@@ -1,7 +1,7 @@
 #!/bin/bash
 #cd MCL_lite
 rm -rf __pycache__
-rm module/tests/tmp*.npz
+rm module/tests/tmp*.npz mcl_sparse.pyc
 git config --global user.email xiaohu@iastate.edu
 git config --global user.name Rinoahu
 
