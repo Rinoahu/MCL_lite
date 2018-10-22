@@ -18,6 +18,7 @@ import cPickle
 import mmap
 try:
     from _numpypy import multiarray as npy
+    print 'pypy compiler'
 except:
     import numpy as npy
 #import numpy as npy
@@ -40,7 +41,7 @@ class darray:
         self.size = int(size)
         self.dtype = dtype
 
-        if self.dtype == 'float8' or self.dtype == 'int8':
+        if self.dtype == 'uint8' or self.dtype == 'int8':
             self.stride = 1
         elif self.dtype == 'float16' or self.dtype == 'int16':
             self.stride = 2
@@ -75,6 +76,57 @@ class darray:
         L += 1
         self.buf = mmap.mmap(self.f.fileno(), L, prot=mmap.ACCESS_WRITE)
         self.dat = npy.frombuffer(self.buf, self.dtype)
+
+
+    def truncate(self, N):
+        self.size = N
+        L = self.size * self.stride
+        self.f.truncate(L)
+        self.f.close()
+        self.f = open(self.fn, "r+b")
+
+        try:
+            self.buf = mmap.mmap(self.f.fileno(), L, prot=mmap.ACCESS_WRITE)
+            self.dat = npy.frombuffer(self.buf, self.dtype)
+        except:
+            pass
+
+
+
+def memmap(fn, mode='w+', shape=None, dtype='int8'):
+    if dtype == 'int8':
+        stride = 1
+    elif dtype == 'float16' or dtype == 'int16':
+        stride = 2
+
+    elif dtype == 'float32' or dtype == 'int32':
+        stride = 4
+    else:
+        stride = 8
+
+    if isinstance(shape, int):
+        L = shape
+    elif isinstance(shape, tuple): 
+        L = 1
+        for i in shape:
+            L *= i
+    else:
+        L = 0
+
+    if 'w' in mode and L > 0:
+        f = open(fn, mode)
+        f.seek(L*stride-1)
+        f.write('\x00')
+        f.seek(0)
+    else:
+        f = open(fn, mode)
+
+    print 'L', L
+    buf = mmap.mmap(f.fileno(), L*stride, prot=mmap.ACCESS_WRITE)
+    return npy.frombuffer(buf, dtype=dtype)
+
+
+
 
 
 # a x b = z
@@ -118,7 +170,7 @@ def csrmm0(x0, y0, z0, x1, y1, z1, z2n='tmp'):
         for i3 in xrange(i2):
             j = key[i3]
             zij = row_i[j]
-            if zij > 0:
+            if zij != 0:
 
                 if z2_ptr > z2.size:
                     y2d.resize()
@@ -148,7 +200,7 @@ class ht:
 
 
 # a0 x a1
-def csrmm(r0, c0, d0, r1, c1, d1, fn='tmp'):
+def csrmm1(r0, c0, d0, r1, c1, d1, fn='tmp'):
     # r: row index 
     # c: col index
     # d: data
@@ -190,7 +242,7 @@ def csrmm(r0, c0, d0, r1, c1, d1, fn='tmp'):
         for i3 in xrange(i2):
             j = key[i3]
             zij = row_i[j]
-            if zij > 0:
+            if zij != 0:
 
                 if z2_ptr > z2.size:
                     y2d.resize()
@@ -206,6 +258,165 @@ def csrmm(r0, c0, d0, r1, c1, d1, fn='tmp'):
         x2_ptr += 1
 
 
+
+# dict based
+def csrmm2(r0, c0, d0, r1, c1, d1, fn='tmp'):
+    # r: row index 
+    # c: col index
+    # d: data
+
+    R = r0.size
+    C = (c0.size + c1.size) * 10
+    r2d = darray(fn + '_r.npz', R, dtype=r0.dtype)
+    c2d = darray(fn + '_c.npz', C, dtype=c0.dtype)
+    d2d = darray(fn + '_d.npz', C, dtype=d0.dtype)
+
+    r2, c2, d2 = r2d.dat, c2d.dat, d2d.dat
+    # values of ith row
+    r2[0] = 0
+    ptr = 0
+
+    di = {}
+    for i in xrange(r0.size-1):
+        k00, k01 = r0[i:i+2]
+        if k00 == k01:
+            r2[i+1] = r2[i]
+            continue
+
+        for k0i in xrange(k00, k01):
+            k = c0[k0i]
+            a0ik = d0[k0i]
+
+            k10, k11 = r1[k:k+2]
+            for k1i in xrange(k10, k11):
+                j = c1[k1i]
+                a1kj = d1[k1i]
+                zij = a0ik * a1kj
+                try:
+                    di[j] += zij
+                except:
+                    di[j] = zij
+
+        # add to z
+        #print len(di)
+        for j in di:
+            zij = di[j]
+            if zij != 0:
+                if ptr >= d2.size:
+                    c2d.resize()
+                    d2d.resize()
+                    c2, d2 = c2d.dat, d2d.dat
+
+                c2[ptr] = j
+                d2[ptr] = zij
+                ptr += 1
+
+        di.clear()
+        r2[i+1] = ptr
+        
+
+    print 'ptr', ptr
+    #r2d.truncate(ptr)
+    c2d.truncate(ptr)
+    d2d.truncate(ptr)
+
+    return r2d, c2d, d2d
+
+
+
+
+def csrmm(r0, c0, d0, r1, c1, d1, fn='tmp'):
+    # r: row index 
+    # c: col index
+    # d: data
+
+    R = r0.size
+    C = (c0.size + c1.size) * 10
+    r2d = darray(fn + '_r.npz', R, dtype=r0.dtype)
+    c2d = darray(fn + '_c.npz', C, dtype=c0.dtype)
+    d2d = darray(fn + '_d.npz', C, dtype=d0.dtype)
+
+    r2, c2, d2 = r2d.dat, c2d.dat, d2d.dat
+    # values of ith row
+    r2[0] = 0
+    ptr = 0
+
+    #di = {}
+    key = array('i', [0]) * R
+    visit = array('b', [0]) * R
+    val = array('d', [0]) * R
+
+    for i in xrange(r0.size-1):
+        k00, k01 = r0[i:i+2]
+        if k00 == k01:
+            r2[i+1] = r2[i]
+            continue
+
+        # clear val and key
+        kv_ptr = 0
+
+
+        #print 'visit', i, kv_ptr, visit
+
+        for k0i in xrange(k00, k01):
+            k = c0[k0i]
+            a0ik = d0[k0i]
+
+            k10, k11 = r1[k:k+2]
+            for k1i in xrange(k10, k11):
+                j = c1[k1i]
+                a1kj = d1[k1i]
+                #zij = val[j] + a0ik * a1kj
+                #try:
+                #    di[j] += zij
+                #except:
+                #    di[j] = zij
+                #print 'hello', zij
+                val[j] += a0ik * a1kj
+                if visit[j] == 0:
+                    key[kv_ptr] = j
+                    kv_ptr += 1
+                    visit[j] = 1
+                #else:
+                #    print visit[j], val[j], 'fuck', i, j
+
+        # add to z
+        #for j in di:
+        #print 'kv_ptr', kv_ptr
+        for kvi in xrange(kv_ptr):
+            j = key[kvi]
+            zij = val[j]
+            #print 'zij', zij
+            if zij != 0:
+                if ptr >= d2.size:
+                    c2d.resize()
+                    d2d.resize()
+                    c2, d2 = c2d.dat, d2d.dat
+
+                c2[ptr] = j
+                d2[ptr] = zij
+                ptr += 1
+                val[j] = 0
+
+            visit[j] = 0
+    
+
+        #di.clear()
+        r2[i+1] = ptr
+        
+
+    print 'ptr', ptr
+    #r2d.truncate(ptr)
+    c2d.truncate(ptr)
+    d2d.truncate(ptr)
+
+    return r2d, c2d, d2d
+
+
+
+
+
+# array based ndarray
 class nd:
     def __init__(self, shape, dtype='f'):
         self.shape = shape
@@ -295,6 +506,30 @@ def ndot(x, y):
 
 
 if __name__ == '__main__':
+
+    #z0 = csrmm2(indptr, indice, data, indptr, indice, data, fn='./tests/tmp0')
+    try:
+        from scipy import sparse
+        import numpy as np
+        data = np.memmap('./tests/data.npz', dtype='float32')
+        indptr = np.memmap('./tests/indptr.npz', dtype='int32')
+        indice = np.memmap('./tests/indice.npz', dtype='int32')
+        print type(indice)
+        x = sparse.csr_matrix((data, indice, indptr))
+        print 'scipy'
+
+        z0 = x * x
+    except:
+        data = memmap('./tests/data.npz', 'r+', dtype='float32')
+        indptr = memmap('./tests/indptr.npz', 'r+', dtype='int32')
+        indice = memmap('./tests/indice.npz', 'r+', dtype='int32')
+
+        print 'pypy'
+        z1 = csrmm(indptr, indice, data, indptr, indice, data, fn='./tests/tmp1')
+
+
+    raise SystemExit()
+
     n = int(eval(sys.argv[1]))
     #x = darray('test.npy', n)
     try:
