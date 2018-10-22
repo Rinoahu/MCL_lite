@@ -6760,6 +6760,22 @@ def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
     tmpfn = tmp_path + '/' + str(xi) + '_' + str(yi) + '_*_*ms.npy'
     os.system('rm %s'%tmpfn)
 
+    try:
+        z.indptr._mmap.close()
+    except:
+        pass
+
+    try:
+        z.indices._mmap.close()
+    except:
+        pass
+
+    try:
+        z.data._mmap.close()
+    except:
+        pass
+
+
     del z
     gc.collect()
 
@@ -6970,6 +6986,10 @@ def badd(xy):
             z = i
         else:
             z += i
+        try:
+            i._mmap.close()
+        except:
+            pass
         del i
         gc.collect()
 
