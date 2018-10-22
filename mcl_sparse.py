@@ -6742,7 +6742,7 @@ def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
     row_sum = np.asarray(z.sum(0), 'float32')[0]
     #row_sum = np.asarray(z.max(0).todense(), 'float32')[0]
 
-    norm_dat = z.data / row_sum.take(z.indices, mode='clip')
+    #norm_dat = z.data / row_sum.take(z.indices, mode='clip')
     #z.data[norm_dat < prune] = 0
 
     #P = int(1. / prune) + 1
@@ -6757,7 +6757,8 @@ def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
     row_sum_n = tmp_path + '/' + str(xi) + '_' + str(yi) + '_rowsum.npz'
     np.savez_compressed(row_sum_n, row_sum)
 
-    tmpfn = tmp_path + '/' + str(xi) + '_' + str(yi) + '_*_*ms.npy'
+    tmpfn = tmp_path + '/' + str(xi) + '_x_' + str(yi) + '_tmp_*_ms.npy'
+    print 'try_remove_tmpfn', tmpfn
     os.system('rm %s'%tmpfn)
 
     try:
@@ -10657,8 +10658,11 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
     fn, shape, csr, check, rtol, tmp_path, prune, diag = parameters
     P = int(1. / prune) + 1
     if type(row_sum) == type(None):
-        row_sum = np.asarray(
-            np.memmap(tmp_path + '/row_sum_total.npy', mode='r', dtype='float32'))
+        #row_sum = np.asarray(
+        #    np.memmap(tmp_path + '/row_sum_total.npy', mode='r', dtype='float32'))
+
+        fp = np.memmap(tmp_path + '/row_sum_total.npy', mode='r', dtype='float32')
+        row_sum = np.asarray(fp)
 
     err = None
     try:
@@ -10677,6 +10681,10 @@ def sdiv(parameters, row_sum=None, dtype='float32', order='c'):
         x.data = np.nan_to_num(x.data)
         #x.data[x.data < prune] = 0
 
+        try:
+            fp._mmap.close()
+        except:
+            pass
         print 'max_x_data_fk', x.data.max(), x.sum(0).max(), x.sum(1).max(), row_sum.max(), row_sum.min()
         #xt = load_matrix(fn, shape=shape, csr=csr).T
         #xt.data /= row_sum.take(xt.indices, mode='clip')
@@ -10757,8 +10765,11 @@ def rsdiv(parameters, row_sum=None, dtype='float32', order='c'):
     fn, shape, csr, check, rtol, tmp_path, prune, rgl = parameters
     P = int(1. / prune) + 1
     if type(row_sum) == type(None):
-        row_sum = np.asarray(
-            np.memmap(tmp_path + '/row_sum_total.npy', mode='r', dtype='float32'))
+        #row_sum = np.asarray(
+        #    np.memmap(tmp_path + '/row_sum_total.npy', mode='r', dtype='float32'))
+
+        fp = np.memmap(tmp_path + '/row_sum_total.npy', mode='r', dtype='float32')
+        row_sum = np.asarray(fp)
 
     err = None
     try:
@@ -10767,6 +10778,11 @@ def rsdiv(parameters, row_sum=None, dtype='float32', order='c'):
         #    x.data /= row_sum.take(x.indices, mode='clip')
 
         x.data /= row_sum.take(x.indices, mode='clip')
+
+        try:
+            fp._mmap.close()
+        except:
+            pass
 
         #xt = load_matrix(fn, shape=shape, csr=csr).T
         #xt.data /= row_sum.take(xt.indices, mode='clip')
