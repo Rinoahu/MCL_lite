@@ -6729,8 +6729,8 @@ def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
         gc.collect()
     if type(xr) != type(None) and type(yc) != type(None):
         xyn_tmp = tmp_path + '/' + str(xi) + '_x_' + str(yi) + '_tmp'
-        #z = csrmm_ez(xr, yc, cpu=cpu, prefix=xyn_tmp, tmp_path=tmp_path)
-        z = csrmm_ez_ms(xr, yc, cpu=cpu, prefix=xyn_tmp, tmp_path=tmp_path)
+        z = csrmm_ez(xr, yc, cpu=cpu, prefix=xyn_tmp, tmp_path=tmp_path)
+        #z = csrmm_ez_ms(xr, yc, cpu=cpu, prefix=xyn_tmp, tmp_path=tmp_path)
 
     else:
         return None, None, None
@@ -6959,7 +6959,9 @@ def bkmat(xyns, cpu=1, ms=True):
         pass
 
     try:
-        z = csrmm_ez_ms(X, Y, prefix=prefix, tmp_path=tmp_path, cpu=1)
+        #z = csrmm_ez_ms(X, Y, prefix=prefix, tmp_path=tmp_path, cpu=1)
+        z = csrmm_ez(X, Y, prefix=prefix, tmp_path=tmp_path, cpu=1)
+
     except:
         z = None
     # print 'get z', z
