@@ -6756,6 +6756,10 @@ def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
     sparse.save_npz(xyn + '_new', z)
     row_sum_n = tmp_path + '/' + str(xi) + '_' + str(yi) + '_rowsum.npz'
     np.savez_compressed(row_sum_n, row_sum)
+
+    tmpfn = tmp_path + '/' + str(xi) + '_' + str(yi) + '_*_*ms.npy'
+    os.system('rm %s'%tmpfn)
+
     del z
     gc.collect()
 
