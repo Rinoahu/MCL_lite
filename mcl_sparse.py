@@ -743,8 +743,7 @@ def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z):
 
 
 
-
-def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
+def csrmm_ez_ms0(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     np.nan_to_num(a.data, False)
     np.nan_to_num(b.data, False)
 
@@ -838,6 +837,95 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
     #zmtx = sps.csr_matrix((z, zc, zr), shape=shape)
     #print 'Zr, Zc, Z is', zmtx.indptr, zmtx.indices, zmtx.data 
     #zmtx.eliminate_zeros()
+
+    return zmtx
+
+
+
+
+
+
+def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
+    np.nan_to_num(a.data, False)
+    np.nan_to_num(b.data, False)
+
+    xr, xc, x = a.indptr, a.indices, a.data
+    yr, yc, y = b.indptr, b.indices, b.data
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    chk = x.size + y.size
+    nnz = chk
+    nnz = min(max(int(1. * x.size * y.size / (D - 1)), chk * 33), chk * 50)
+
+    if prefix == None:
+        #tmpfn = tempfile.mktemp('tmp', dir='./tmp/')
+        tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
+    else:
+        #tmpfn = tempfile.mktemp(prefix, dir=tmp_path)
+        tmpfn = prefix
+
+    print 'the_tmpfn_fk', tmp_path, prefix
+
+
+
+
+    zr = np.zeros(R, xr.dtype)
+
+    #zc = np.asarray(np.memmap('zc_tmp.npy', mode='w+', shape=nnz,  dtype=xc.dtype))
+    #zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
+
+    #z = np.asarray(np.memmap('z_tmp.npy', mode='w+', shape=nnz, dtype=x.dtype))
+    #z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
+
+    with np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype) as zc, np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype) as z:
+
+
+        print 'a nnz', a.nnz, 'b nnz', b.nnz
+        st = time()
+        # if cpu > 1 and x.size > 5e8:
+        #    csrmm = csrmm_sp
+        # if cpu > 1 and x.size < 5e8:
+        # if cpu > 1:
+        csrmm = csrmm_ms
+
+        nnzs = x.size + y.size
+        #visit = np.zeros(yr.size, 'int8')
+        #Zr, Zc, Z, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
+        #zptr, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z, visit)
+        zptr, flag = csrmm(xr, xc, x, yr, yc, y, zr, zc, z)
+
+
+        # truncate
+        print 'before truncate', zc.size, zptr
+        zc.flush()
+        N = zptr * zc.strides[0]
+        fn = zc.filename
+        _dtype = zc.dtype
+        del zc
+        f = open(fn, 'r+')
+        f.truncate(N)
+        f.close()
+        zc = np.memmap(fn, mode='r+', dtype=_dtype)
+        print 'after truncate', zc.size, zptr
+
+
+        z.flush()
+        N = zptr * z.strides[0]
+        fn = z.filename
+        _dtype = z.dtype
+        del z
+        f = open(fn, 'r+')
+        f.truncate(N)
+        f.close()
+        z = np.memmap(fn, mode='r+', dtype=_dtype)
+
+
+        shape = (a.shape[0], b.shape[1])
+        zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+
+        zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
 
     return zmtx
 
@@ -12658,9 +12746,6 @@ def mcl9(qry, tmp_path=None, xy=[], I=1.5, prune=1 / 4e3, select=1100, recover=1
         _o.close()
 
 
-# def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, itr=100,
-# rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None,
-# sym=False, rsm=False, mem=4):
 def mcl0(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5 * 10**7, outfile=None, sym=False, rsm=False, mem=4):
 
     if tmp_path == None:
@@ -12824,6 +12909,40 @@ def mcl0(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=140
     if outfile and type(outfile) == str:
         _o.close()
 
+
+def get_connect(fns):
+    g = None
+    #g = load_matrix(fns[0], shape, True)
+    #cs = csgraph.connected_components(g)
+    cs = None
+    for fn in fns[1:]:
+        try:
+            g0 = load_matrix(fn, shape, True)
+        except:
+            g0 = None
+            continue
+
+        try:
+            g += g0
+        except:
+            g += g0
+
+        if g.nnz > 1e8:
+            ci = csgraph.connected_components(g)
+            try:
+                cs = merge_connected(cs, ci)
+            except:
+                cs = ci
+            g = None
+
+    if type(g) != type(None):
+        ci = csgraph.connected_components(g)
+        try:
+            cs = merge_connected(cs, ci)
+        except:
+            cs = ci
+
+    return cs
 
 
 
