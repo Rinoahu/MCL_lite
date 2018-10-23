@@ -12915,9 +12915,11 @@ def get_connect(fns):
     #g = load_matrix(fns[0], shape, True)
     #cs = csgraph.connected_components(g)
     cs = None
-    for fn in fns[1:]:
+    for fn in fns:
+        print 'fn', fn
         try:
-            g0 = load_matrix(fn, shape, True)
+            g0 = load_matrix(fn, csr=True)
+            print 'g0', g0.nnz
         except:
             g0 = None
             continue
@@ -12925,7 +12927,7 @@ def get_connect(fns):
         try:
             g += g0
         except:
-            g += g0
+            g = g0
 
         if g.nnz > 1e8:
             ci = csgraph.connected_components(g)
