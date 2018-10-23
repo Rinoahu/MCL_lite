@@ -743,7 +743,7 @@ def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z):
 
 
 
-def csrmm_ez_ms0(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
+def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     np.nan_to_num(a.data, False)
     np.nan_to_num(b.data, False)
 
@@ -829,14 +829,28 @@ def csrmm_ez_ms0(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
 
 
     shape = (a.shape[0], b.shape[1])
-    zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+    #zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
 
-    #zmtx.indptr, zmtx.indices, zmtx.data = zr[:zptr], zc[:zptr], z[:zptr]
-    zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+    #zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
 
     #zmtx = sps.csr_matrix((z, zc, zr), shape=shape)
     #print 'Zr, Zc, Z is', zmtx.indptr, zmtx.indices, zmtx.data 
     #zmtx.eliminate_zeros()
+
+    if disk:
+        zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+        zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+    else:
+        indptr = np.array(zr)
+        indices = np.array(zc)
+        data = np.array(z)
+        zmtx = sparse.csr_matrix((data, indices, indptr), shape=shape, dtype=z.dtype)
+        #zr._mmap.close()
+        zc._mmap.close()
+        z._mmap.close()
+        del zr, zc, z
+
+    gc.collect()
 
     return zmtx
 
@@ -845,7 +859,7 @@ def csrmm_ez_ms0(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
 
 
 
-def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
+def csrmm_ez_ms0(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     np.nan_to_num(a.data, False)
     np.nan_to_num(b.data, False)
 
@@ -6829,8 +6843,8 @@ def element_fast(xi, yi, d, qry, shape=(10**8, 10**8), tmp_path=None, csr=True, 
         gc.collect()
     if type(xr) != type(None) and type(yc) != type(None):
         xyn_tmp = tmp_path + '/' + str(xi) + '_x_' + str(yi) + '_tmp'
-        z = csrmm_ez(xr, yc, cpu=cpu, prefix=xyn_tmp, tmp_path=tmp_path)
-        #z = csrmm_ez_ms(xr, yc, cpu=cpu, prefix=xyn_tmp, tmp_path=tmp_path)
+        #z = csrmm_ez(xr, yc, cpu=cpu, prefix=xyn_tmp, tmp_path=tmp_path)
+        z = csrmm_ez_ms(xr, yc, cpu=cpu, prefix=xyn_tmp, tmp_path=tmp_path)
 
     else:
         return None, None, None
@@ -7059,8 +7073,8 @@ def bkmat(xyns, cpu=1, ms=True):
         pass
 
     try:
-        #z = csrmm_ez_ms(X, Y, prefix=prefix, tmp_path=tmp_path, cpu=1)
-        z = csrmm_ez(X, Y, prefix=prefix, tmp_path=tmp_path, cpu=1)
+        z = csrmm_ez_ms(X, Y, prefix=prefix, tmp_path=tmp_path, cpu=1)
+        #z = csrmm_ez(X, Y, prefix=prefix, tmp_path=tmp_path, cpu=1)
 
     except:
         z = None
