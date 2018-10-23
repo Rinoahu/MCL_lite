@@ -664,20 +664,18 @@ def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
     visit = np.zeros(yr.size, dtype=np.int8)
     index = np.zeros(yr.size, yr.dtype)
     zptr = 0
-    for i in xrange(R - 1):
+    for i in xrange(R-1):
 
         # get ith row of a
-        kst, ked = xr[i], xr[i + 1]
+        kst, ked = xr[i], xr[i+1]
         if kst == ked:
             continue
 
-        i_sz = index.size
         ks = 0
-        nz = 0
         for k in xrange(kst, ked):
             x_col = xc[k]
             # get row of b
-            jst, jed = yr[x_col], yr[x_col + 1]
+            jst, jed = yr[x_col], yr[x_col+1]
             if jst == jed:
                 continue
 
@@ -697,14 +695,12 @@ def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
 
         zptr += ks
 
-
-    print 'the zptr hello', zptr
     return zptr
 
 
 
 @njit(fastmath=True, nogil=True, cache=True)
-def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
+def csrmm_ms_2pass0(xr, xc, x, yr, yc, y, zr, zc, z):
 
     R = xr.shape[0]
     D = yr.shape[0]
@@ -789,6 +785,122 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
     return zptr, flag
 
 
+@njit(fastmath=True, nogil=True, cache=True)
+def csrmm_ms_2pass1(xr, xc, x, yr, yc, y, zr, zc, z):
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    nnz = z.size
+    data = np.zeros(D - 1, dtype=x.dtype)
+    visit = np.zeros(yr.size, dtype=np.int8)
+    index = np.zeros(yr.size, yr.dtype)
+    zptr = 0
+    for i in xrange(R - 1):
+
+        # get ith row of a
+        kst, ked = xr[i], xr[i + 1]
+        if kst == ked:
+            zr[i + 1] = zr[i]
+            continue
+
+        #i_sz = index.size
+        ks = 0
+        #nz = 0
+        for k in xrange(kst, ked):
+            x_col, x_val = xc[k], x[k]
+            # get row of b
+            jst, jed = yr[x_col], yr[x_col + 1]
+            if jst == jed:
+                continue
+
+            #nz += jed - jst
+            for j in xrange(jst, jed):
+                y_col, y_val = yc[j], y[j]
+                y_col_val = data[y_col] + x_val * y_val
+                if y_col_val != 0:
+                    if visit[y_col] == 0:
+                        index[ks] = y_col
+                        ks += 1
+                        visit[y_col] = 1
+
+                    data[y_col] = y_col_val
+                else:
+                    continue
+    
+        for pt in xrange(ks):
+            y_col = index[pt]
+            y_col_val = data[y_col]
+            if y_col_val != 0:
+                zc[zptr], z[zptr] = y_col, y_col_val
+                zptr += 1
+                data[y_col] = visit[y_col] = 0
+
+
+        zr[i + 1] = zptr
+
+    #print 'the zptr hello', zptr
+    flag = zptr
+    return zptr, flag
+
+
+
+
+@njit(fastmath=True, nogil=True, cache=True)
+def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
+
+    R = xr.size
+    D = yr.size
+    nnz = z.size
+    data = np.zeros(D-1, dtype=x.dtype)
+    visit = np.zeros(yr.size, dtype=np.int8)
+    index = np.zeros(yr.size, yr.dtype)
+    zptr = 0
+    for i in xrange(R - 1):
+
+        # get ith row of a
+        kst, ked = xr[i], xr[i + 1]
+        if kst == ked:
+            zr[i + 1] = zr[i]
+            continue
+
+        #i_sz = index.size
+        ks = 0
+        #nz = 0
+        for k in xrange(kst, ked):
+            x_col, x_val = xc[k], x[k]
+            # get row of b
+            jst, jed = yr[x_col], yr[x_col + 1]
+            if jst == jed:
+                continue
+
+            #nz += jed - jst
+            for j in xrange(jst, jed):
+                y_col, y_val = yc[j], y[j]
+                data[y_col] += x_val * y_val
+                if visit[y_col] == 0:
+                    index[ks] = y_col
+                    ks += 1
+                    visit[y_col] = 1
+                else:
+                    continue
+    
+        for pt in xrange(ks):
+            y_col = index[pt]
+            y_col_val = data[y_col]
+            if y_col_val != 0:
+                zc[zptr], z[zptr] = y_col, y_col_val
+                zptr += 1
+            data[y_col] = visit[y_col] = 0
+
+
+        zr[i+1] = zptr
+
+    #print 'the zptr hello', zptr
+    flag = zptr
+    return zptr, flag
+
+
+
 
 
 
@@ -802,6 +914,7 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     R = xr.shape[0]
     D = yr.shape[0]
     nnz = csrmm_ms_1pass(xr, xc, x, yr, yc, y)
+    print '1st pass', nnz
 
 
     if prefix == None:
