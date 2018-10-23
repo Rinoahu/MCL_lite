@@ -845,7 +845,7 @@ def csrmm_ez_ms0(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
 
 
 
-def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
+def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     np.nan_to_num(a.data, False)
     np.nan_to_num(b.data, False)
 
@@ -923,9 +923,21 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
 
 
         shape = (a.shape[0], b.shape[1])
-        zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
 
-        zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+        if disk:
+            zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+            zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+        else:
+            indptr = np.array(zr)
+            indices = np.array(zc)
+            data = np.array(z)
+            zmtx = sparse.csr_matrix((data, indices, indptr), shape=shape, dtype=z.dtype)
+            zr._mmap.close()
+            zc._mmap.close()
+            z._mmap.close()
+            del zr, zc, z
+            gc.collect()
+
 
     return zmtx
 
