@@ -657,7 +657,7 @@ def csrmm_ms0(xr, xc, x, yr, yc, y, zr, zc, z, visit):
 
 
 @njit(fastmath=True, nogil=True, cache=True)
-def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
+def csrmm_ms_1pass0(xr, xc, x, yr, yc, y):
 
     R = xr.shape[0]
     D = yr.shape[0]
@@ -690,12 +690,60 @@ def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
     
         for pt in xrange(ks):
             y_col = index[pt]
-            zptr += 1
+            #zptr += 1
             visit[y_col] = 0
 
         zptr += ks
 
     return zptr
+
+
+@njit(fastmath=True, nogil=True, cache=True)
+def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
+
+    R = xr.size
+    D = yr.size
+    visit = np.zeros(D, dtype=np.int8)
+    index = np.zeros(D, yr.dtype)
+    data = np.zeros(D, y.dtype)
+
+    zptr = 0
+    for i in xrange(R-1):
+
+        # get ith row of a
+        kst, ked = xr[i], xr[i+1]
+        if kst == ked:
+            continue
+
+        ks = 0
+        for k in xrange(kst, ked):
+            x_col, x_val = xc[k], x[k]
+            # get row of b
+            jst, jed = yr[x_col], yr[x_col+1]
+            if jst == jed:
+                continue
+
+            for j in xrange(jst, jed):
+                y_col, y_val = yc[j], y[j]
+                data[y_col] += x_val * y_val
+                if visit[y_col] == 0:
+                    index[ks] = y_col
+                    ks += 1
+                    visit[y_col] = 1
+                else:
+                    continue
+    
+        for pt in xrange(ks):
+            y_col = index[pt]
+            visit[y_col] = 0
+            if data[y_col] != 0:
+                data[y_col] = 0
+                zptr += 1
+
+    return zptr
+
+
+
 
 
 
