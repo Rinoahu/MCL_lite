@@ -657,7 +657,54 @@ def csrmm_ms0(xr, xc, x, yr, yc, y, zr, zc, z, visit):
 
 
 @njit(fastmath=True, nogil=True, cache=True)
-def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z):
+def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    visit = np.zeros(yr.size, dtype=np.int8)
+    index = np.zeros(yr.size, yr.dtype)
+    zptr = 0
+    for i in xrange(R - 1):
+
+        # get ith row of a
+        kst, ked = xr[i], xr[i + 1]
+        if kst == ked:
+            continue
+
+        i_sz = index.size
+        ks = 0
+        nz = 0
+        for k in xrange(kst, ked):
+            x_col = xc[k]
+            # get row of b
+            jst, jed = yr[x_col], yr[x_col + 1]
+            if jst == jed:
+                continue
+
+            for j in xrange(jst, jed):
+                y_col = yc[j]
+                if visit[y_col] == 0:
+                    index[ks] = y_col
+                    ks += 1
+                    visit[y_col] = 1
+                else:
+                    continue
+    
+        for pt in xrange(ks):
+            y_col = index[pt]
+            zptr += 1
+            visit[y_col] = 0
+
+        zptr += ks
+
+
+    print 'the zptr hello', zptr
+    return zptr
+
+
+
+@njit(fastmath=True, nogil=True, cache=True)
+def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
 
     R = xr.shape[0]
     D = yr.shape[0]
@@ -743,6 +790,8 @@ def csrmm_ms(xr, xc, x, yr, yc, y, zr, zc, z):
 
 
 
+
+
 def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     np.nan_to_num(a.data, False)
     np.nan_to_num(b.data, False)
@@ -752,9 +801,87 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
 
     R = xr.shape[0]
     D = yr.shape[0]
-    chk = x.size + y.size
-    nnz = chk
-    nnz = min(max(int(1. * x.size * y.size / (D - 1)), chk * 33), chk * 50)
+    nnz = csrmm_ms_1pass(xr, xc, x, yr, yc, y)
+
+
+    if prefix == None:
+        tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
+    else:
+        tmpfn = prefix
+
+    zr = np.zeros(R, xr.dtype)
+
+    if disk:
+        zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
+        z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
+
+    else:
+        zc = np.empty(nnz,  dtype=xc.dtype)
+        z = np.empty(nnz, dtype=x.dtype)
+
+    print 'a nnz', a.nnz, 'b nnz', b.nnz
+
+    zptr, flag = csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z)
+
+    # truncate
+    if disk:
+        print 'before truncate', zc.size, zptr
+        zc.flush()
+        N = zptr * zc.strides[0]
+        fn = zc.filename
+        _dtype = zc.dtype
+        del zc
+        f = open(fn, 'r+')
+        f.truncate(N)
+        f.close()
+        zc = np.memmap(fn, mode='r+', dtype=_dtype)
+        print 'after truncate', zc.size, zptr
+
+
+        z.flush()
+        N = zptr * z.strides[0]
+        fn = z.filename
+        _dtype = z.dtype
+        del z
+        f = open(fn, 'r+')
+        f.truncate(N)
+        f.close()
+        z = np.memmap(fn, mode='r+', dtype=_dtype)
+
+
+    shape = (a.shape[0], b.shape[1])
+    if disk:
+        zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+        zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+    else:
+        indptr = zr
+        indices = zc
+        data = z
+        zmtx = sparse.csr_matrix((data, indices, indptr), shape=shape, dtype=z.dtype)
+
+    gc.collect()
+
+    return zmtx
+
+
+
+
+
+def csrmm_ez_ms1(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
+    np.nan_to_num(a.data, False)
+    np.nan_to_num(b.data, False)
+
+    xr, xc, x = a.indptr, a.indices, a.data
+    yr, yc, y = b.indptr, b.indices, b.data
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    #chk = x.size + y.size
+    #nnz = chk
+    #nnz = min(max(int(1. * x.size * y.size / (D - 1)), chk * 33), chk * 50)
+    nnz = csrmm_ms_1pass(xr, xc, x, yr, yc, y, zr, zc, z)
+
 
     if prefix == None:
         #tmpfn = tempfile.mktemp('tmp', dir='./tmp/')
