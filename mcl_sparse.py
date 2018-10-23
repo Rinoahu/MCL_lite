@@ -657,7 +657,7 @@ def csrmm_ms0(xr, xc, x, yr, yc, y, zr, zc, z, visit):
 
 
 @njit(fastmath=True, nogil=True, cache=True)
-def csrmm_ms_1pass0(xr, xc, x, yr, yc, y):
+def csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y):
 
     R = xr.shape[0]
     D = yr.shape[0]
@@ -690,7 +690,6 @@ def csrmm_ms_1pass0(xr, xc, x, yr, yc, y):
     
         for pt in xrange(ks):
             y_col = index[pt]
-            #zptr += 1
             visit[y_col] = 0
 
         zptr += ks
@@ -961,7 +960,7 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
 
     R = xr.shape[0]
     D = yr.shape[0]
-    nnz = csrmm_ms_1pass(xr, xc, x, yr, yc, y)
+    nnz = csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y)
     print '1st pass', nnz
 
 
