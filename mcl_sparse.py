@@ -169,6 +169,153 @@ class worker(Thread):
             return None
 
 
+
+
+
+# a + b
+@njit(fastmath=True, nogil=True, cache=True)
+def csram_ms(xr, xc, x, yr, yc, y, zr, zc, z):
+
+    R = xr.size
+    D = yr.size
+    nnz = z.size
+    data = np.zeros(D-1, dtype=x.dtype)
+    visit = np.zeros(D, dtype=np.int8)
+    index = np.zeros(D, yr.dtype)
+    zptr = 0
+    for i in xrange(R - 1):
+
+        ks = 0
+        # get ith row of a
+        0st, 0ed = xr[i], xr[i+1]
+        1st, 1ed = yr[i], yr[i+1]
+        for j in xrange(0st, 0ed):
+            col, val = xc[j], x[j]
+            data[col] += val
+            if visit[col] == 0:
+                index[ks] = col
+                ks += 1
+                visit[col] = 1
+            else:
+                continue
+
+        for j in xrange(1st, 1ed):
+            col, val = yc[j], y[j]
+            data[col] += val
+            if visit[col] == 0:
+                index[ks] = col
+                ks += 1
+                visit[col] = 1
+            else:
+                continue
+
+        for pt in xrange(ks):
+            col = index[pt]
+            visit[y_col] = 0
+            val = data[col]
+            if val != 0:
+                zc[zptr], z[zptr] = col, val
+                zptr += 1
+                data[col] = 0
+
+        zr[i+1] = zptr
+
+    #print 'the zptr hello', zptr
+    flag = zptr
+    return zptr, flag
+
+
+
+
+
+
+
+# a + b
+def csram_ez_ms(a, b, cpu=1, prefix=None, tmp_path=None, disk=False):
+    assert a.shape == b.shape
+    np.nan_to_num(a.data, False)
+    np.nan_to_num(b.data, False)
+
+    xr, xc, x = a.indptr, a.indices, a.data
+    yr, yc, y = b.indptr, b.indices, b.data
+
+    R = xr.shape[0]
+    nnz = a.nnz + b.nnz
+
+    if prefix == None:
+        tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
+    else:
+        tmpfn = prefix
+
+    zr = np.zeros(R, xr.dtype)
+
+    if disk:
+        zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
+        z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
+
+    else:
+        zc = np.empty(nnz,  dtype=xc.dtype)
+        z = np.empty(nnz, dtype=x.dtype)
+
+
+    zptr, flag = csram_ms(xr, xc, x, yr, yc, y, zr, zc, z)
+
+    # truncate
+    if disk:
+        print 'before truncate', zc.size, zptr
+        zc.flush()
+        N = zptr * zc.strides[0]
+        fn = zc.filename
+        _dtype = zc.dtype
+        del zc
+        f = open(fn, 'r+')
+        f.truncate(N)
+        f.close()
+        zc = np.memmap(fn, mode='r+', dtype=_dtype)
+        print 'after truncate', zc.size, zptr
+
+
+        z.flush()
+        N = zptr * z.strides[0]
+        fn = z.filename
+        _dtype = z.dtype
+        del z
+        f = open(fn, 'r+')
+        f.truncate(N)
+        f.close()
+        z = np.memmap(fn, mode='r+', dtype=_dtype)
+
+
+    shape = a.shape
+    if disk:
+        zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+        zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+    else:
+        indptr = zr
+        indices = zc
+        data = z
+        zmtx = sparse.csr_matrix((data, indices, indptr), shape=shape, dtype=z.dtype)
+
+    gc.collect()
+
+    return zmtx
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @njit
 def resize(a, new_size):
     new = np.empty(new_size, a.dtype)
@@ -933,11 +1080,12 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
     
         for pt in xrange(ks):
             y_col = index[pt]
+            visit[y_col] = 0
             y_col_val = data[y_col]
             if y_col_val != 0:
                 zc[zptr], z[zptr] = y_col, y_col_val
                 zptr += 1
-            data[y_col] = visit[y_col] = 0
+                data[y_col] = 0
 
 
         zr[i+1] = zptr
