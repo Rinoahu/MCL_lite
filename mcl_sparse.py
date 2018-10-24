@@ -187,9 +187,9 @@ def csram_ms(xr, xc, x, yr, yc, y, zr, zc, z):
 
         ks = 0
         # get ith row of a
-        0st, 0ed = xr[i], xr[i+1]
-        1st, 1ed = yr[i], yr[i+1]
-        for j in xrange(0st, 0ed):
+        ast, aed = xr[i], xr[i+1]
+        bst, bed = yr[i], yr[i+1]
+        for j in xrange(ast, aed):
             col, val = xc[j], x[j]
             data[col] += val
             if visit[col] == 0:
@@ -199,7 +199,7 @@ def csram_ms(xr, xc, x, yr, yc, y, zr, zc, z):
             else:
                 continue
 
-        for j in xrange(1st, 1ed):
+        for j in xrange(bst, bed):
             col, val = yc[j], y[j]
             data[col] += val
             if visit[col] == 0:
@@ -211,7 +211,7 @@ def csram_ms(xr, xc, x, yr, yc, y, zr, zc, z):
 
         for pt in xrange(ks):
             col = index[pt]
-            visit[y_col] = 0
+            visit[col] = 0
             val = data[col]
             if val != 0:
                 zc[zptr], z[zptr] = col, val
