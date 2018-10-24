@@ -3946,6 +3946,67 @@ def mat_split_gpu(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False,
     return q2n, block
 
 
+# save sparse csr on disk in my csr format
+def save_npz_disk(csr, fn):
+    #pass
+    data = csr.data
+    indices = csr.indices
+    indptr = csr.indptr
+    #r_size, c_size, d_size = indptr.size, indices.size, data.size
+    #r_stride, c_stride, d_stride = indptr.strides, indices.strides, data.strides
+    #N = r_size * r_stride + c_size * c_stride + d_size * d_stride
+    a, b = indptr.size, indices.size
+    print 'a', a, 'b', b, 'data', len(data)
+
+    N = 4 + a + b + b
+    fp = np.memmap(fn, mode='w+', shape=N, dtype='int32')
+    R, C = csr.shape
+    fp[:4] = [R, C, a, b]
+    start = 4
+    end = start + a
+    #indptr.dtype = 'int8'
+    fp[start: end] = indptr
+
+
+    start = end
+    end = b + start
+    #indices.dtype = 'int8'
+    fp[start:end] = indices
+
+    start = end
+    end = b + start
+    data = np.asarray(data, 'float32')
+    data.dtype = 'int32'
+    fp[start:end] = data
+    fp._mmap.close()
+    del fp
+
+
+# load my csr format on disk
+def load_npz_disk(fn):
+    fp = np.memmap(fn, dtype='int32')
+    shape = (fp[0], fp[1])
+    a, b = fp[2:4]
+    indptr = fp[4:4+a]
+    indices = fp[4+a:4+a+b]
+    data = fp[4+a+b:4+a+b+b]
+    data.dtype = 'float32'
+    csr = sparse.csr_matrix(shape)
+    csr.data, csr.indices, csr.indptr = data, indices, indptr
+    return csr
+      
+
+
+
+
+# close my csr format:
+def csr_close(csr):
+    try:
+       csr.indptr._mmap.close()
+    except:
+        pass
+
+
 # load sparse matrix from disk
 def load_matrix(qry, shape=(10**8, 10**8), csr=False):
     if csr == False:
