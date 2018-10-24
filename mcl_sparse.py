@@ -251,10 +251,12 @@ def csram_ez_ms(a, b, cpu=1, prefix=None, tmp_path=None, disk=False):
     zr = np.zeros(R, xr.dtype)
 
     if disk:
+        #zr = np.memmap(tmpfn + '_zr_ms.npy', mode='w+', shape=R,  dtype=xr.dtype)
         zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
         z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
 
     else:
+        #zr = np.zeros(R, xr.dtype)
         zc = np.empty(nnz,  dtype=xc.dtype)
         z = np.empty(nnz, dtype=x.dtype)
 
@@ -291,6 +293,14 @@ def csram_ez_ms(a, b, cpu=1, prefix=None, tmp_path=None, disk=False):
     if disk:
         zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
         zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+
+        save_npz_disk(zmtx, tmpfn + '.npy')
+        del zmtx
+        os.system('rm %s_z*_ms.npy'%tmpfn)
+        zmtx = load_npz_disk(tmpfn + '.npy') 
+
+
+
     else:
         indptr = zr
         indices = zc
@@ -1119,12 +1129,13 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
         tmpfn = prefix
 
     zr = np.zeros(R, xr.dtype)
-
     if disk:
+        #zr = np.memmap(tmpfn + '_zr_ms.npy', mode='w+', shape=R,  dtype=xr.dtype)
         zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
         z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
 
     else:
+        #zr = np.zeros(R, xr.dtype)
         zc = np.empty(nnz,  dtype=xc.dtype)
         z = np.empty(nnz, dtype=x.dtype)
 
@@ -1162,6 +1173,11 @@ def csrmm_ez_ms(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     if disk:
         zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
         zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+        save_npz_disk(zmtx, tmpfn + '.npy')
+        del zmtx
+        os.system('rm %s_z*_ms.npy'%tmpfn)
+        zmtx = load_npz_disk(tmpfn + '.npy') 
+
     else:
         indptr = zr
         indices = zc
