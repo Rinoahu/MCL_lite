@@ -5522,7 +5522,10 @@ def topks(indptr, indices, data, k):
                 continue
 
             ct[i] = 0
-            mi[i] = (hi[i] + lo[i]) / 2.
+            mid = (hi[i] + lo[i]) / 2.
+            mi[i] = mid
+            if mid == hi[i] or mid == lo[i]:
+                visit[i] = 0
 
         for i in xrange(nnz):
             col = indices[i]
@@ -5547,7 +5550,7 @@ def topks(indptr, indices, data, k):
             else:
                 visit[i] = 0
 
-            if lo[i] >= hi[i] or lo[i] == mi[i] or hi[i] == mi[i]:
+            if lo[i] >= hi[i]:
                 visit[i] = 0
 
         flag = np.any(visit)
