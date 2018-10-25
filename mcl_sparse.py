@@ -5547,7 +5547,7 @@ def topks(indptr, indices, data, k):
             else:
                 visit[i] = 0
 
-            if lo[i] >= hi[i]:
+            if lo[i] >= hi[i] or lo[i] == mi[i] or hi[i] == mi[i]:
                 visit[i] = 0
 
         flag = np.any(visit)
