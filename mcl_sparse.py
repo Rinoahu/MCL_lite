@@ -874,6 +874,12 @@ def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
         ks = 0
         for k in xrange(kst, ked):
             x_col, x_val = xc[k], x[k]
+
+            if x_val != 0:
+                pass
+            else:
+                continue
+
             # get row of b
             jst, jed = yr[x_col], yr[x_col+1]
             if jst == jed:
@@ -881,6 +887,12 @@ def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
 
             for j in xrange(jst, jed):
                 y_col, y_val = yc[j], y[j]
+
+                if y_val != 0:
+                    pass
+                else:
+                    continue
+
                 data[y_col] += x_val * y_val
                 if visit[y_col] == 0:
                     index[ks] = y_col
@@ -897,8 +909,6 @@ def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
                 zptr += 1
 
     return zptr
-
-
 
 
 
@@ -1115,6 +1125,90 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
     #print 'the zptr hello', zptr
     flag = zptr
     return zptr, flag
+
+
+
+
+def csrmm_ez_ms_slow(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
+    np.nan_to_num(a.data, False)
+    np.nan_to_num(b.data, False)
+
+    xr, xc, x = a.indptr, a.indices, a.data
+    yr, yc, y = b.indptr, b.indices, b.data
+
+    shape = (a.shape[0], b.shape[1])
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    #nnz = csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y)
+    nnz = csrmm_ms_1pass(xr, xc, x, yr, yc, y)
+    print '1st pass', nnz
+
+    if prefix == None:
+        tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
+    else:
+        tmpfn = prefix
+
+    if not tmpfn.endswith('.npy'):
+        tmpfn += '.npy'
+
+    #zr = np.zeros(R, xr.dtype)
+    if disk:
+        #zr = np.memmap(tmpfn + '_zr_ms.npy', mode='w+', shape=R,  dtype=xr.dtype)
+        #zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
+        #z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
+
+        ac = R
+        bc = nnz
+
+        Nc = 4 + ac + bc + bc
+        fp = np.memmap(tmpfn, mode='w+', shape=Nc, dtype='int32')
+        Rc, Cc = shape
+
+        fp[:4] = [Rc, Cc, ac, bc]
+        start = 4
+        end = start + ac
+        zr = fp[start: end]
+
+
+        start = end
+        end = bc + start
+        zc = fp[start:end]
+
+        start = end
+        end = bc + start
+        z = fp[start:end]
+        z.dtype = 'float32'
+
+
+    else:
+        zr = np.zeros(R, xr.dtype)
+        zc = np.empty(nnz,  dtype=xc.dtype)
+        z = np.empty(nnz, dtype=x.dtype)
+
+    print 'a nnz', a.nnz, 'b nnz', b.nnz
+
+    zptr, flag = csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z)
+
+
+    if disk:
+        #zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+        #zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+        #save_npz_disk(zmtx, tmpfn + '.npy')
+        #del zmtx
+        #os.system('rm %s_z*_ms.npy'%tmpfn)
+        zmtx = load_npz_disk(tmpfn) 
+
+    else:
+        indptr = zr
+        indices = zc
+        data = z
+        zmtx = sparse.csr_matrix((data, indices, indptr), shape=shape, dtype=z.dtype)
+
+    gc.collect()
+
+    return zmtx
 
 
 
