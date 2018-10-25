@@ -5630,7 +5630,7 @@ def topks(indptr, indices, data, k):
 
 
 
-def topk_ez(x):
+def topk_ez(x, k=10):
     return topks(x.indptr, x.indices, x.data, k)
 
 
