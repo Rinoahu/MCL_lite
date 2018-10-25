@@ -5455,11 +5455,6 @@ def pruning(qry, tmp_path=None, prune=1 / 4e3, S=1100, R=1400, cpu=1, fast=False
 
 
 
-
-
-
-
-
 # get threshold of large k
 def topk(x, k):
     assert len(x) >= k
@@ -5486,7 +5481,7 @@ def topk(x, k):
 
 
 @njit(fastmath=True, cache=True)
-def topks(indptr, indices, data, k):
+def topks0(indptr, indices, data, k):
     R = indptr.size
     nnz = indices.size
     lo, hi = np.zeros(R, dtype=np.float32), np.zeros(R, dtype=np.float32)
@@ -5558,6 +5553,80 @@ def topks(indptr, indices, data, k):
     return mi, ct
 
 
+
+
+@njit(fastmath=True, cache=True)
+def topks(indptr, indices, data, k):
+    R = indptr.size
+    nnz = indices.size
+    lo, hi = np.zeros(R, dtype=np.float32), np.zeros(R, dtype=np.float32)
+    end = 0
+    for i in xrange(nnz):
+        col = indices[i]
+        val = data[i]
+        if lo[col] > val:
+            lo[col] = val
+        if hi[col] < val:
+            hi[col] = val
+
+        end = col < end and end or col
+
+    end += 1
+
+    lo = lo[: end]
+    hi = hi[: end]
+    ct = np.zeros(end, dtype=np.int32)
+    visit = np.ones(end, dtype=np.int8)
+    mi = lo.copy()
+
+    flag = np.any(visit)
+    itr = 0
+    while flag:
+        print 'iteration', itr, visit.sum()
+        itr += 1
+        #ct[:] = 0
+        for i in xrange(end):
+            if visit[i] == 0:
+                continue
+
+            ct[i] = 0
+            mi[i] = (hi[i] + lo[i]) / 2.
+            if mi[i] == hi[i] or mi[i] == lo[i]:
+                visit[i] = 0
+
+        for i in xrange(nnz):
+            col = indices[i]
+            if visit[col] == 0:
+                #print 'yes', col
+                continue
+
+            val = data[i]
+            mid = mi[col]
+            # get top k
+            if val > mid:
+                #print 'yes'
+                ct[col] += 1
+
+        #print 'hello'
+
+        for i in xrange(end):
+            if visit[i] == 0:
+                continue
+
+            if ct[i] < k:
+                hi[i] = mi[i]
+            elif ct[i] > k:
+                lo[i] = mi[i]
+            else:
+                visit[i] = 0
+
+            if lo[i] >= hi[i]:
+                visit[i] = 0
+
+
+        flag = np.any(visit)
+
+    return mi, ct
 
 
 
