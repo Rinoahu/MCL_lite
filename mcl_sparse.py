@@ -191,6 +191,12 @@ def csram_ms(xr, xc, x, yr, yc, y, zr, zc, z):
         bst, bed = yr[i], yr[i+1]
         for j in xrange(ast, aed):
             col, val = xc[j], x[j]
+
+            if val != 0:
+                pass
+            else:
+                continue
+
             data[col] += val
             if visit[col] == 0:
                 index[ks] = col
@@ -201,6 +207,12 @@ def csram_ms(xr, xc, x, yr, yc, y, zr, zc, z):
 
         for j in xrange(bst, bed):
             col, val = yc[j], y[j]
+
+            if val != 0:
+                pass
+            else:
+                continue
+
             data[col] += val
             if visit[col] == 0:
                 index[ks] = col
@@ -310,18 +322,6 @@ def csram_ez_ms(a, b, cpu=1, prefix=None, tmp_path=None, disk=False):
     gc.collect()
 
     return zmtx
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1072,6 +1072,12 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
         #nz = 0
         for k in xrange(kst, ked):
             x_col, x_val = xc[k], x[k]
+
+            if x_val != 0:
+                pass
+            else:
+                continue
+
             # get row of b
             jst, jed = yr[x_col], yr[x_col + 1]
             if jst == jed:
@@ -1080,6 +1086,12 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
             #nz += jed - jst
             for j in xrange(jst, jed):
                 y_col, y_val = yc[j], y[j]
+
+                if y_val != 0:
+                    pass
+                else:
+                    continue
+
                 data[y_col] += x_val * y_val
                 if visit[y_col] == 0:
                     index[ks] = y_col
@@ -5442,9 +5454,112 @@ def pruning(qry, tmp_path=None, prune=1 / 4e3, S=1100, R=1400, cpu=1, fast=False
     return max(cutoff)
 
 
+
+
+
+
+
+
+# get threshold of large k
+def topk(x, k):
+    assert len(x) >= k
+    lo = hi = 0
+    for i in x:
+        lo = lo > i and i or lo
+        hi = hi < i and i or hi
+
+    ct = N = len(x)
+    p = lo
+    while lo < hi:
+        ct = 0
+        p = (lo + hi) / 2.
+        for i in x:
+            ct += i >= p and 1 or 0
+        if ct == k:
+            break
+        elif ct < k:
+            hi = p
+        else:
+            lo = p
+
+	return p, count
+
+
+@njit(fastmath=True, cache=True)
+def topks(indptr, indices, data, k):
+    R = indptr.size
+    nnz = indices.size
+    lo, hi = np.zeros(R, dtype=np.float32), np.zeros(R, dtype=np.float32)
+    end = 0
+    for i in xrange(nnz):
+        col = indices[i]
+        val = data[i]
+        if lo[col] > val:
+            lo[col] = val
+        if hi[col] < val:
+            hi[col] = val
+
+        end = col < end and end or col
+
+    end += 1
+
+    lo = lo[: end]
+    hi = hi[: end]
+    ct = np.zeros(end, dtype=np.int32)
+    visit = np.ones(end, dtype=np.int8)
+    mi = lo.copy()
+
+    flag = np.any(visit)
+    itr = 0
+    while flag:
+
+        print 'iteration', itr, visit.sum()
+        itr += 1
+
+        #ct[:] = 0
+        for i in xrange(end):
+            if visit[i] == 0:
+                continue
+
+            ct[i] = 0
+            mi[i] = (hi[i] + lo[i]) / 2.
+
+        for i in xrange(nnz):
+            col = indices[i]
+            if visit[col] == 0:
+                #print 'yes', col
+                continue
+
+            val = data[i]
+            mid = mi[col]
+            # get top k
+            if val > mid:
+                ct[col] += 1
+
+        for i in xrange(end):
+            if visit[i] == 0:
+                continue
+
+            if ct[i] < k:
+                hi[i] = mi[i]
+            elif ct[i] > k:
+                lo[i] = mi[i]
+            else:
+                visit[i] = 0
+
+            if lo[i] >= hi[i]:
+                visit[i] = 0
+
+        flag = np.any(visit)
+
+    return mi, ct
+
+
+
+
+
+
 # split row block and col block into row_col block
-
-
 def preprocess(qry, tmp_path=None):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
