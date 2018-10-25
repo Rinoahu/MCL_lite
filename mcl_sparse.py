@@ -5630,6 +5630,10 @@ def topks(indptr, indices, data, k):
 
 
 
+def topk_ez(x):
+    return topks(x.indptr, x.indices, x.data, k):
+
+
 
 # split row block and col block into row_col block
 def preprocess(qry, tmp_path=None):
