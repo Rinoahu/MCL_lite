@@ -5631,7 +5631,7 @@ def topks(indptr, indices, data, k):
 
 
 def topk_ez(x):
-    return topks(x.indptr, x.indices, x.data, k):
+    return topks(x.indptr, x.indices, x.data, k)
 
 
 
