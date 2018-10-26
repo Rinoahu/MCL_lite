@@ -237,19 +237,15 @@ def csram_ms(xr, xc, x, yr, yc, y, zr, zc, z):
     return zptr, flag
 
 
-
-
-
-
-
 # a + b
-def csram_ez_ms(a, b, cpu=1, prefix=None, tmp_path=None, disk=False):
+def csram_ez_ms0(a, b, cpu=1, prefix=None, tmp_path=None, disk=False):
     assert a.shape == b.shape
     np.nan_to_num(a.data, False)
     np.nan_to_num(b.data, False)
 
     xr, xc, x = a.indptr, a.indices, a.data
     yr, yc, y = b.indptr, b.indices, b.data
+
 
     R = xr.shape[0]
     nnz = a.nnz + b.nnz
@@ -261,17 +257,16 @@ def csram_ez_ms(a, b, cpu=1, prefix=None, tmp_path=None, disk=False):
         tmpfn = prefix
 
     zr = np.zeros(R, xr.dtype)
-
     if disk:
         #zr = np.memmap(tmpfn + '_zr_ms.npy', mode='w+', shape=R,  dtype=xr.dtype)
         zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
         z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
 
+
     else:
         #zr = np.zeros(R, xr.dtype)
         zc = np.empty(nnz,  dtype=xc.dtype)
         z = np.empty(nnz, dtype=x.dtype)
-
 
     zptr, flag = csram_ms(xr, xc, x, yr, yc, y, zr, zc, z)
 
@@ -311,7 +306,75 @@ def csram_ez_ms(a, b, cpu=1, prefix=None, tmp_path=None, disk=False):
         os.system('rm %s_z*_ms.npy'%tmpfn)
         zmtx = load_npz_disk(tmpfn + '.npy') 
 
+    else:
+        indptr = zr
+        indices = zc
+        data = z
+        zmtx = sparse.csr_matrix((data, indices, indptr), shape=shape, dtype=z.dtype)
 
+    gc.collect()
+
+    return zmtx
+
+
+
+def csram_ez_ms(a, b, cpu=1, prefix=None, tmp_path=None, disk=False):
+    assert a.shape == b.shape
+    np.nan_to_num(a.data, False)
+    np.nan_to_num(b.data, False)
+
+    xr, xc, x = a.indptr, a.indices, a.data
+    yr, yc, y = b.indptr, b.indices, b.data
+
+    shape = a.shape
+    R = xr.shape[0]
+    nnz = a.nnz + b.nnz
+    if prefix == None:
+        tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
+    else:
+        tmpfn = prefix
+        if not tmpfn.endswith('.npy'):
+            tmpfn += '.npy'
+
+    if disk:
+        ac = R
+        bc = nnz
+
+        Nc = 5 + ac * 2 + bc * 2
+        fp = np.memmap(tmpfn, mode='w+', shape=Nc, dtype='int32')
+        Rc, Cc = shape
+
+        fp[:3] = [Rc, Cc, ac]
+
+        Bc = np.asarray([bc], 'int64')
+        Bc.dtype = 'int32'
+        fp[3:5] = Bc[:2]
+
+        start = 5
+        end = start + ac * 2
+        zr = fp[start: end]
+        zr.dtype = 'int64'
+
+        start = end
+        end = bc + start
+        zc = fp[start:end]
+
+        start = end
+        end = bc + start
+        z = fp[start:end]
+        z.dtype = 'float32'
+
+    else:
+        zr = np.zeros(R, xr.dtype)
+        zc = np.empty(nnz,  dtype=xc.dtype)
+        z = np.empty(nnz, dtype=x.dtype)
+
+
+    zptr, flag = csram_ms(xr, xc, x, yr, yc, y, zr, zc, z)
+
+    if disk:
+        zmtx = load_npz_disk(tmpfn) 
 
     else:
         indptr = zr
@@ -1066,8 +1129,8 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
     D = yr.size
     nnz = z.size
     data = np.zeros(D-1, dtype=x.dtype)
-    visit = np.zeros(yr.size, dtype=np.int8)
-    index = np.zeros(yr.size, yr.dtype)
+    visit = np.zeros(D, dtype=np.int8)
+    index = np.zeros(D, yr.dtype)
     zptr = 0
     for i in xrange(R - 1):
 
@@ -1127,8 +1190,6 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
     return zptr, flag
 
 
-
-
 def csrmm_ez_ms_slow(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     np.nan_to_num(a.data, False)
     np.nan_to_num(b.data, False)
@@ -1162,15 +1223,22 @@ def csrmm_ez_ms_slow(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=Fa
         ac = R
         bc = nnz
 
-        Nc = 4 + ac + bc + bc
+        Nc = 5 + ac * 2 + bc * 2
         fp = np.memmap(tmpfn, mode='w+', shape=Nc, dtype='int32')
         Rc, Cc = shape
 
-        fp[:4] = [Rc, Cc, ac, bc]
-        start = 4
-        end = start + ac
-        zr = fp[start: end]
+        fp[:3] = [Rc, Cc, ac]
 
+        Bc = np.asarray([bc], 'int64')
+        Bc.dtype = 'int32'
+        fp[3: 5] = Bc[:2]
+
+        start = 5
+        end = start + ac * 2
+        zr = fp[start: end]
+        zr.dtype = 'int64'
+
+        print 'zr size', zr.size, ac
 
         start = end
         end = bc + start
@@ -4073,20 +4141,29 @@ def save_npz_disk(csr, fn):
     #pass
     data = csr.data
     indices = csr.indices
-    indptr = csr.indptr
+    #indptr = csr.indptr
+    indptr = np.asarray(csr.indptr, 'int64')
+
     #r_size, c_size, d_size = indptr.size, indices.size, data.size
     #r_stride, c_stride, d_stride = indptr.strides, indices.strides, data.strides
     #N = r_size * r_stride + c_size * c_stride + d_size * d_stride
     a, b = indptr.size, indices.size
     print 'a', a, 'b', b, 'data', len(data)
 
-    N = 4 + a + b + b
+    N = 5 + a * 2 + b * 2
     fp = np.memmap(fn, mode='w+', shape=N, dtype='int32')
     R, C = csr.shape
-    fp[:4] = [R, C, a, b]
-    start = 4
-    end = start + a
+    fp[:3] = [R, C, a]
+
+
+    b = np.asarray([b], 'int64')
+    b.dtype = 'int32'
+    fp[3: 5] = bc[:2]
+
+    start = 5
+    end = start + a * 2
     #indptr.dtype = 'int8'
+    indptr.dtype = 'int32'
     fp[start: end] = indptr
 
 
@@ -4108,10 +4185,24 @@ def save_npz_disk(csr, fn):
 def load_npz_disk(fn):
     fp = np.memmap(fn, dtype='int32')
     shape = (fp[0], fp[1])
-    a, b = fp[2:4]
-    indptr = fp[4:4+a]
-    indices = fp[4+a:4+a+b]
-    data = fp[4+a+b:4+a+b+b]
+    a = fp[2]
+    b = fp[3:5]
+    b.dtype = 'int64'
+    b = b[0]
+
+    start = 5
+    end = start + a * 2
+    indptr = fp[start: end]
+    indptr.dtype = 'int64'
+
+    start = end
+    end = start + b
+    indices = fp[start: end]
+
+
+    start = end
+    end = start + b
+    data = fp[start: end]
     data.dtype = 'float32'
     csr = sparse.csr_matrix(shape)
     csr.data, csr.indices, csr.indptr = data, indices, indptr
