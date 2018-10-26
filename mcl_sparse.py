@@ -60,6 +60,11 @@ try:
 except:
     njit = jit = lambda x: x
 
+try:
+    from numba import prange
+except:
+    prange = xrange
+
 
 # the sparse matrix add matrix on gpu
 if has_gpu:
@@ -5736,6 +5741,134 @@ def topks0(indptr, indices, data, k):
         flag = np.any(visit)
 
     return mi, ct
+
+
+
+# parallelization of top k
+@njit(fastmath=True, cache=True, parallel=True)
+def topks_p(indptr, indices, data, k, cpu=1):
+    R = indptr.size
+
+    chk = R//cpu
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+    starts[-1] = indptr[-1]
+
+    #nnz = indices.size
+    #lo, hi = np.zeros(R, dtype=np.float32), np.zeros(R, dtype=np.float32)
+    #end = 0
+    Lo, Hi = np.zeros((block, R), dtype=np.float32), np.zeros((block, R), dtype=np.float32)
+
+    #for i in indptr_p
+    #end = 0
+    ends = np.zeros(block, dtype=np.int64)
+    for idx in prange(block):
+
+        print 'block', idx, starts
+        L, R = starts[idx:idx+2]
+        r = L // chk
+        for i in xrange(L, R):
+            col = indices[i]
+            val = data[i]
+            if Lo[r, col] > val:
+                Lo[r, col] = val
+            if Hi[r, col] < val:
+                Hi[r, col] = val
+
+            #end = col < end and end or col
+            ends[r] = max(ends[r], col)
+
+    #end += 1
+    end = ends.max() + 1
+
+    print 'loops'
+
+    lo, hi = np.zeros(end, dtype=np.float32), np.zeros(end, dtype=np.float32)
+
+    for i in xrange(block):
+        for j in xrange(end):
+            low = Lo[i, j]
+            if lo[j] > low:
+                lo[j] = low
+
+            up = Hi[i, j]
+            if hi[j] < up:
+                hi[j] = up
+
+    mi = lo.copy()
+
+    ct = np.zeros(end, dtype=np.int32)
+
+    #print 'R, end', R, end
+    cts = np.zeros((block, end), dtype=np.int32)
+
+    visit = np.ones(end, dtype=np.int8)
+
+    loop = np.any(visit)
+
+    itr = 0
+
+    while loop:
+
+        print 'iteration', itr, visit.sum()
+        itr += 1
+
+        for i in xrange(end):
+            if visit[i] == 0:
+                continue
+
+            ct[i] = 0
+            cts[:, i] = 0
+            mi[i] = (hi[i] + lo[i]) / 2.
+            if mi[i] == hi[i] or mi[i] == lo[i]:
+                visit[i] = 0
+
+        for idx in prange(block):
+            L, R = starts[idx:idx+2]
+            r = L // chk
+            for i in xrange(L, R):
+                col = indices[i]
+                if visit[col] == 0:
+                    continue
+
+                val = data[i]
+                mid = mi[col]
+                # get top k
+                if val > mid:
+                    #print 'yes'
+                    cts[r, col] += 1
+
+        #print 'hello'
+        #ct = cts.sum(0)
+        for j in xrange(block):
+            for i in xrange(end):
+                if visit[i] == 0:
+                    continue
+                ct[i] += cts[j, i]
+
+
+        for i in xrange(end):
+            if visit[i] == 0:
+                continue
+
+            if ct[i] < k:
+                hi[i] = mi[i]
+            elif ct[i] > k:
+                lo[i] = mi[i]
+            else:
+                visit[i] = 0
+
+            if lo[i] >= hi[i]:
+                visit[i] = 0
+
+
+        loop = np.any(visit)
+
+    return mi, ct
+
 
 
 
