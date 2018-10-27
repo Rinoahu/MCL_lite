@@ -922,6 +922,101 @@ def csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y):
     return zptr
 
 
+# parallelization of 1pass
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
+
+    R = xr.size
+    D = yr.size
+
+
+    chk = R // cpu
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+
+    starts[-1] = R
+
+    #print 'R is', R, idxs, xr[-1]
+    #print '1pass_cpu', cpu, starts
+
+    zptr = np.zeros(block, dtype=np.int64)
+    ks = np.zeros(block, dtype=np.int64)
+
+    visit = np.zeros((block, D), dtype=np.int8)
+    index = np.zeros((block, D), yr.dtype)
+    data = np.zeros((block, D), y.dtype)
+
+    #print 'zptr', block, data.shape, starts
+    #print 'Rp is', starts[-1], xr[starts[-1]]
+    for idx in prange(block):
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        #print 'L, R', Le, Rt, starts, chk, block, r
+        #print 'L_R', xr[Le], xr[Rt-1]
+        #print 'L, R', Le, Rt, xr[Le], xr[Rt]
+        Rt = min(R-1, Rt)
+        for i in xrange(Le, Rt):
+            # get ith row of a
+            kst, ked = xr[i], xr[i+1]
+            if kst == ked:
+                continue
+
+            ks[r] = 0
+            for k in xrange(kst, ked):
+                x_col, x_val = xc[k], x[k]
+
+                if x_val != 0:
+                    pass
+                else:
+                    continue
+
+                # get row of b
+                jst, jed = yr[x_col], yr[x_col+1]
+                if jst == jed:
+                    continue
+
+                for j in xrange(jst, jed):
+                    y_col, y_val = yc[j], y[j]
+
+                    if y_val != 0:
+                        pass
+                    else:
+                        continue
+
+                    data[r, y_col] += x_val * y_val
+                    if visit[r, y_col] == 0:
+                        index[r, ks[r]] = y_col
+                        ks[r] += 1
+                        visit[r, y_col] = 1
+                    else:
+                        continue
+
+            for pt in xrange(ks[r]):
+                y_col = index[r, pt]
+                visit[r, y_col] = 0
+                if data[r, y_col] != 0:
+                    data[r, y_col] = 0
+                    zptr[r] += 1
+
+
+    zptr_new = np.zeros(block+1, dtype=np.int64)
+    for i in xrange(block):
+        zptr_new[i+1] = zptr[i] + zptr_new[i]
+
+
+    #print 'zptr_1pass', zptr_new, zptr.sum()
+
+    #return zptr
+    return zptr_new
+
+
+
+
+
+
 @njit(fastmath=True, nogil=True, cache=True)
 def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
 
@@ -932,6 +1027,8 @@ def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
     data = np.zeros(D, y.dtype)
 
     zptr = 0
+
+    #print 'R is', R 
     for i in xrange(R-1):
 
         # get ith row of a
@@ -976,6 +1073,7 @@ def csrmm_ms_1pass(xr, xc, x, yr, yc, y):
                 data[y_col] = 0
                 zptr += 1
 
+    #print 'zptr_is', zptr
     return zptr
 
 
@@ -1127,6 +1225,104 @@ def csrmm_ms_2pass1(xr, xc, x, yr, yc, y, zr, zc, z):
 
 
 
+
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
+
+    R = xr.size
+    D = yr.size
+    nnz = z.size
+
+    #print '2pass_cpu', cpu, z.size
+    chk = R // cpu
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+    starts[-1] = R
+
+
+    visit = np.zeros((block, D), dtype=np.int8)
+    index = np.zeros((block, D), yr.dtype)
+    data = np.zeros((block, D), y.dtype)
+
+
+    ks = np.zeros(block, dtype=np.int64)
+    zptr = offset
+
+
+    for idx in prange(block):
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        #print 'idx', Le, Rt
+        Rt = min(R-1, Rt)
+        for i in xrange(Le, Rt):
+        #for i in xrange(Le,  Rt-1):
+
+            #print 'before', zptr[r]
+            zr[i+1] = zptr[r]
+
+            # get ith row of a
+            kst, ked = xr[i], xr[i+1]
+            if kst == ked:
+                zr[i+1] = zr[i]
+                continue
+
+            #i_sz = index.size
+            ks[r] = 0
+            #nz = 0
+            for k in xrange(kst, ked):
+                x_col, x_val = xc[k], x[k]
+
+                if x_val != 0:
+                    pass
+                else:
+                    continue
+
+                # get row of b
+                jst, jed = yr[x_col], yr[x_col+1]
+                if jst == jed:
+                    continue
+
+                #nz += jed - jst
+                for j in xrange(jst, jed):
+                    y_col, y_val = yc[j], y[j]
+
+                    if y_val != 0:
+                        pass
+                    else:
+                        continue
+
+                    data[r, y_col] += x_val * y_val
+                    if visit[r, y_col] == 0:
+                        index[r, ks[r]] = y_col
+                        ks[r] += 1
+                        visit[r, y_col] = 1
+                    else:
+                        continue
+    
+            for pt in xrange(ks[r]):
+                y_col = index[r, pt]
+                visit[r, y_col] = 0
+                y_col_val = data[r, y_col]
+                if y_col_val != 0:
+                    zc[zptr[r]], z[zptr[r]] = y_col, y_col_val
+                    #print 'fuck', y_col_val, zptr[r], y_col
+                    #print 'fuck', zc[zptr[r]], z[zptr[r]] 
+
+                    zptr[r] += 1
+                    data[r, y_col] = 0
+
+
+            zr[i+1] = zptr[r]
+            #print 'after', zptr[r], zc.size
+
+    #print 'the zptr hello', zptr
+    flag = zptr
+    return zptr, flag
+
+
 @njit(fastmath=True, nogil=True, cache=True)
 def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
 
@@ -1193,6 +1389,101 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
     #print 'the zptr hello', zptr
     flag = zptr
     return zptr, flag
+
+
+
+def csrmm_ez_ms_slow_p(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
+    np.nan_to_num(a.data, False)
+    np.nan_to_num(b.data, False)
+
+    xr, xc, x = a.indptr, a.indices, a.data
+    yr, yc, y = b.indptr, b.indices, b.data
+
+    shape = (a.shape[0], b.shape[1])
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    #nnz = csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y)
+    zptr = csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=cpu)
+    nnz = zptr[-1]
+    print '1st pass', nnz, zptr
+
+    if prefix == None:
+        tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
+    else:
+        tmpfn = prefix
+
+    if not tmpfn.endswith('.npy'):
+        tmpfn += '.npy'
+
+    #zr = np.zeros(R, xr.dtype)
+    if disk:
+        #zr = np.memmap(tmpfn + '_zr_ms.npy', mode='w+', shape=R,  dtype=xr.dtype)
+        #zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
+        #z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
+
+        ac = R
+        bc = nnz
+
+        Nc = 5 + ac * 2 + bc * 2
+        fp = np.memmap(tmpfn, mode='w+', shape=Nc, dtype='int32')
+        Rc, Cc = shape
+
+        fp[:3] = [Rc, Cc, ac]
+
+        Bc = np.asarray([bc], 'int64')
+        Bc.dtype = 'int32'
+        fp[3: 5] = Bc[:2]
+
+        start = 5
+        end = start + ac * 2
+        zr = fp[start: end]
+        zr.dtype = 'int64'
+
+        print 'zr size', zr.size, ac
+
+        start = end
+        end = bc + start
+        zc = fp[start:end]
+
+        start = end
+        end = bc + start
+        z = fp[start:end]
+        z.dtype = 'float32'
+
+
+    else:
+        zr = np.zeros(R, xr.dtype)
+        zc = np.empty(nnz,  dtype=xc.dtype)
+        z = np.empty(nnz, dtype=x.dtype)
+
+    print 'a nnz', a.nnz, 'b nnz', b.nnz
+
+    zptr, flag = csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+
+
+    if disk:
+        #zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+        #zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+        #save_npz_disk(zmtx, tmpfn + '.npy')
+        #del zmtx
+        #os.system('rm %s_z*_ms.npy'%tmpfn)
+        zmtx = load_npz_disk(tmpfn) 
+
+    else:
+        indptr = zr
+        indices = zc
+        data = z
+        zmtx = sparse.csr_matrix((data, indices, indptr), shape=shape, dtype=z.dtype)
+
+    gc.collect()
+
+    return zmtx
+
+
+
+
 
 
 def csrmm_ez_ms_slow(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
