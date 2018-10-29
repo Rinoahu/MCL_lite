@@ -257,7 +257,7 @@ def inflate_norm_ez(x, I=1.5, cpu=1):
 # inflate and get row sum
 @njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def inflate_t(xr, xc, x, row_sums, Le, Rt, r, I=1.5):
-
+    print 'inflate_t_r', r
     R = xr.size
     Rt = min(R-1, Rt)
     for i in xrange(Le, Rt):
@@ -277,7 +277,7 @@ def inflate_t(xr, xc, x, row_sums, Le, Rt, r, I=1.5):
 # normalization
 @njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def norm_t(xr, xc, x, row_sum, row_sums_sqs, row_maxs, Le, Rt, r, I=1.5):
-
+    print 'inflate_t_r', r
     R = xr.size
     Rt = min(R-1, Rt)
     # normalization and get the chaos
