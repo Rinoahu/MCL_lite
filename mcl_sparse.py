@@ -956,7 +956,7 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1):
                 x_col, x_val = xc[k], x[k]
                 # inflation
                 x_val = np.power(x_val, I)
-                x[k] = x_val
+                #x[k] = x_val
                 row_sums[r, x_col] += x_val
 
     row_sum = np.zeros(R, dtype=np.float32)
@@ -981,6 +981,7 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1):
 
             for k in xrange(kst, ked):
                 x_col, x_val = xc[k], x[k]
+                x_val = np.power(x_val, I)
                 rsum = row_sum[x_col]
                 x[k] = rsum != 0 and x_val / rsum or x_val
                 row_sums_sqs[r, x_col] += x[k] * x[k]
