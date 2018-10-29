@@ -922,6 +922,87 @@ def csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y):
     return zptr
 
 
+# normalization of matrix
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+def inflate_norm_p(xr, xc, x, I=1.5, cpu=1):
+
+    R = xr.size
+
+    chk = R // cpu
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+    starts[-1] = R
+
+    row_sums = np.zeros((block, R), dtype=np.float32)
+    #print 'zptr', block, data.shape, starts
+    #print 'Rp is', starts[-1], xr[starts[-1]]
+    for idx in prange(block):
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        #print 'L, R', Le, Rt, starts, chk, block, r
+        #print 'L_R', xr[Le], xr[Rt-1]
+        #print 'L, R', Le, Rt, xr[Le], xr[Rt]
+        Rt = min(R-1, Rt)
+        for i in xrange(Le, Rt):
+            # get ith row of a
+            kst, ked = xr[i], xr[i+1]
+            if kst == ked:
+                continue
+
+            for k in xrange(kst, ked):
+                x_col, x_val = xc[k], x[k]
+                # inflation
+                x_val = np.power(x_val, I)
+                x[k] = x_val
+                row_sums[r, x_col] += x_val
+
+    row_sum = np.zeros(R, dtype=np.float32)
+    for i in xrange(block):
+        for j in xrange(R):
+            row_sum[j] += row_sums[i, j]
+
+
+    row_sums_sqs = np.zeros((block, R), dtype=np.float32)
+    row_maxs = np.zeros((block, R), dtype=np.float32)
+
+    # normalization and get the chaos
+    for idx in prange(block):
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        Rt = min(R-1, Rt)
+        for i in xrange(Le, Rt):
+            # get ith row of a
+            kst, ked = xr[i], xr[i+1]
+            if kst == ked:
+                continue
+
+            for k in xrange(kst, ked):
+                x_col, x_val = xc[k], x[k]
+                rsum = row_sum[x_col]
+                x[k] = rsum != 0 and x_val / rsum or x_val
+                row_sums_sqs[r, x_col] += x[k] * x[k]
+                row_maxs[r, x_col] = max(row_maxs[r, x_col], x[k])
+
+
+    return row_maxs, row_sums_sqs
+
+# inflation and normalization
+def inflate_norm_ez(x, I=1.5, cpu=1):
+    row_maxs, row_sums_sqs = inflate_norm_p(x.indptr, x.indices, x.data, I=I, cpu=cpu)
+    chaos = row_maxs.max(0) - row_sums_sqs.sum(0)
+    return chaos.max()
+
+
+
+
+
+
+
+
+
 # parallelization of 1pass
 @njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
@@ -14283,6 +14364,173 @@ def get_connect(fns):
             cs = ci
 
     return cs
+
+def mcl1(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5 * 10**7, outfile=None, sym=False, rsm=False, mem=4):
+
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    if rsm == False:
+        os.system('mkdir -p %s' % tmp_path)
+        os.system('rm -rf %s/*' % tmp_path)
+
+        q2n, block = mat_split(qry, tmp_path=tmp_path,
+                               chunk=chunk, cpu=cpu, sym=sym, mem=mem)
+
+        N = len(q2n)
+
+        # save q2n to disk
+        print 'saving q2n to disk'
+        _o = open(tmp_path + '_dict.pkl', 'wb')
+        cPickle.dump(q2n, _o, cPickle.HIGHEST_PROTOCOL)
+        _o.close()
+
+        del q2n
+        gc.collect()
+    else:
+        f = open(tmp_path + '_dict.pkl', 'rb')
+        q2n = cPickle.load(f)
+        N = len(q2n)
+        #os.system('rm %s/*new* %s/*old'%(tmp_path, tmp_path))
+        for tmp in os.listdir(tmp_path):
+            if tmp.endswith('_old'):
+                a_tmp = tmp_path + '/' + tmp
+                b_tmp = tmp_path + '/' + tmp.split('_old')[0]
+                os.system('mv %s %s' % (a_tmp, b_tmp))
+
+        os.system('rm %s/*new*' % tmp_path)
+
+        f.close()
+
+    #prune = min(prune, 100. / N)
+    shape = (N, N)
+    # reorder matrix
+    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=False, block=block, cpu=cpu)
+    # norm
+    fns, cvg, nnz = norm(qry, shape, tmp_path, csr=False,
+                         cpu=cpu, prune=prune, diag=False)
+    #raise SystemExit()
+
+    #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+    #chaos = pruning(qry, tmp_path, prune=prune, S=select, R=recover, cpu=cpu)
+    chaos = 0
+
+    # print 'finish norm', cvg
+    changed = 0
+    # expension
+    for i in xrange(itr):
+        print '#iteration', i
+        # row_sum, fns = expend(qry, shape, tmp_path, True, prune=prune,
+        # cpu=cpu)
+        #row_sum, fns = expend(qry, shape, tmp_path, True, I, prune, cpu)
+        # if i > 0 and i % (check * 2) == 0:
+        #    #q2n, row_sum, fns, nnz = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True)
+        #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True, block=block)
+        #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True)
+
+        #row_sum, fns, nnz = expand(qry, shape, tmp_path, True, I, prune, cpu, fast=False)
+        if i == 0:
+            row_sum, fns, nnz = expand(
+                qry, shape, tmp_path, True, I, prune, cpu, fast=True)
+        else:
+            row_sum, fns, nnz = expand(
+                qry, shape, tmp_path, True, I, prune, cpu)
+
+
+
+        # if i > check and i % check == 0:
+        #    print 'reorder the matrix'
+        #    fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, check=True, cpu=cpu, prune=prune)
+        #    #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=True, block=block, cpu=cpu)
+        # else:
+        #    #os.system('rm %s/*.npz_old'%tmp_path)
+        #    fns, cvg, nnz = norm(qry, shape, tmp_path, row_sum=row_sum, csr=True, cpu=cpu, prune=prune)
+
+        fns, cvg, nnz = norm(qry, shape, tmp_path,
+                             row_sum=row_sum, csr=True, cpu=cpu, prune=prune)
+
+        #pruning(qry, tmp_path, prune=1/50., S=50, R=50, cpu=cpu)
+        chao_old = chaos
+        chaos = pruning(qry, tmp_path, prune=prune,
+                        S=select, R=recover, cpu=cpu, fast=True)
+        changed = abs(chaos - chao_old) < 1e-9 and changed + 1 or 0
+        print 'current_chaos', i, chaos, chao_old
+
+        #if chaos < 1e-3 or changed >= 5:
+        if chaos < 1e-3:
+            break
+
+        if nnz < chunk / 4 and len(fns) > cpu ** 2:
+            # if nnz < chunk / 4 or nnz <= N:
+            print 'we try to merge 4 block into one', nnz, chunk / 4
+            row_sum_new, fns_new, nnz_new, merged = merge_submat(
+                fns, shape, csr=True, cpu=cpu)
+            #row_sum_new, fns_new, nnz_new, merged = merge_submat(fns, shape, csr=True)
+            if merged:
+                row_sum, fns, nnz = row_sum_new, fns_new, nnz_new
+            else:
+                print 'we failed to merge'
+        else:
+            print 'current max nnz is', nnz, chunk, chunk / 4
+
+        if cvg:
+            # print 'yes, convergency'
+            break
+
+    # get connect components
+    '''
+    print 'construct from graph', fns
+    g = load_matrix(fns[0], shape, True)
+    cs = csgraph.connected_components(g)
+    for fn in fns[1:]:
+        g = load_matrix(fn, shape, True)
+        ci = csgraph.connected_components(g)
+        cs = merge_connected(cs, ci)
+
+    del g
+    gc.collect()
+    '''
+
+    g = load_matrix(fns[0], shape, True)
+    #cs = csgraph.connected_components(g)
+    for fn in fns[1:]:
+        g += load_matrix(fn, shape, True)
+        #ci = csgraph.connected_components(g)
+        #cs = merge_connected(cs, ci)
+
+    cs = csgraph.connected_components(g)
+    del g
+    gc.collect()
+
+    # print 'find components', cs
+    # load q2n
+    f = open(tmp_path + '_dict.pkl', 'rb')
+    q2n = cPickle.load(f)
+    f.close()
+    os.system('rm %s_dict.pkl' % tmp_path)
+
+    groups = {}
+    for k, v in q2n.iteritems():
+        c = cs[1][v]
+        try:
+            groups[c].append(k)
+        except:
+            groups[c] = [k]
+
+    del c
+    gc.collect()
+    if outfile and type(outfile) == str:
+        _o = open(outfile, 'w')
+    for v in groups.itervalues():
+        out = '\t'.join(v)
+        if outfile == None:
+            print out
+        else:
+            _o.writelines([out, '\n'])
+    if outfile and type(outfile) == str:
+        _o.close()
+
+
 
 
 
