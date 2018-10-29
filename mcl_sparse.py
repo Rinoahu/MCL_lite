@@ -942,6 +942,7 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1):
     for idx in prange(block):
         Le, Rt = starts[idx: idx+2]
         r = Le // chk
+        print 'current_r', r
         #print 'L, R', Le, Rt, starts, chk, block, r
         #print 'L_R', xr[Le], xr[Rt-1]
         #print 'L, R', Le, Rt, xr[Le], xr[Rt]
