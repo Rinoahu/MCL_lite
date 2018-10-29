@@ -177,6 +177,196 @@ class worker(Thread):
 
 
 
+# normalization of matrix
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+def inflate_norm_p(xr, xc, x, I=1.5, cpu=1):
+
+    R = xr.size
+
+    chk = R // cpu
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+    starts[-1] = R
+
+    row_sums = np.zeros((block, R), dtype=np.float32)
+    #print 'zptr', block, data.shape, starts
+    #print 'Rp is', starts[-1], xr[starts[-1]]
+    for idx in prange(block):
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        print 'current_r', r, block
+        #print 'L, R', Le, Rt, starts, chk, block, r
+        #print 'L_R', xr[Le], xr[Rt-1]
+        #print 'L, R', Le, Rt, xr[Le], xr[Rt]
+        Rt = min(R-1, Rt)
+        for i in xrange(Le, Rt):
+            # get ith row of a
+            kst, ked = xr[i], xr[i+1]
+            if kst == ked:
+                continue
+
+            for k in xrange(kst, ked):
+                x_col, x_val = xc[k], x[k]
+                # inflation
+                x_val = np.power(x_val, I)
+                #x[k] = x_val
+                row_sums[r, x_col] += x_val
+
+    row_sum = np.zeros(R, dtype=np.float32)
+    for i in xrange(block):
+        for j in xrange(R):
+            row_sum[j] += row_sums[i, j]
+
+
+    row_sums_sqs = np.zeros((block, R), dtype=np.float32)
+    row_maxs = np.zeros((block, R), dtype=np.float32)
+
+    # normalization and get the chaos
+    for idx in prange(block):
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        Rt = min(R-1, Rt)
+        for i in xrange(Le, Rt):
+            # get ith row of a
+            kst, ked = xr[i], xr[i+1]
+            if kst == ked:
+                continue
+
+            for k in xrange(kst, ked):
+                x_col, x_val = xc[k], x[k]
+                x_val = np.power(x_val, I)
+                rsum = row_sum[x_col]
+                x[k] = rsum != 0 and x_val / rsum or x_val
+                row_sums_sqs[r, x_col] += x[k] * x[k]
+                row_maxs[r, x_col] = max(row_maxs[r, x_col], x[k])
+
+
+    return row_maxs, row_sums_sqs
+
+# inflation and normalization
+def inflate_norm_ez(x, I=1.5, cpu=1):
+    row_maxs, row_sums_sqs = inflate_norm_p(x.indptr, x.indices, x.data, I=I, cpu=cpu)
+    chaos = row_maxs.max(0) - row_sums_sqs.sum(0)
+    return chaos.max()
+
+
+
+# inflate and get row sum
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+def inflate_t(xr, xc, x, row_sums, Le, Rt, r, I=1.5):
+
+    R = xr.size
+    Rt = min(R-1, Rt)
+    for i in xrange(Le, Rt):
+        # get ith row of a
+        kst, ked = xr[i], xr[i+1]
+        if kst == ked:
+            continue
+
+        for k in xrange(kst, ked):
+            x_col, x_val = xc[k], x[k]
+            # inflation
+            x_val = np.power(x_val, I)
+            x[k] = x_val
+            row_sums[r, x_col] += x_val
+
+
+# normalization
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+def norm_t(xr, xc, x, row_sum, row_sums_sqs, row_maxs, Le, Rt, r, I=1.5):
+
+    R = xr.size
+    Rt = min(R-1, Rt)
+    # normalization and get the chaos
+    for i in xrange(Le, Rt):
+        # get ith row of a
+        kst, ked = xr[i], xr[i+1]
+        if kst == ked:
+            continue
+        for k in xrange(kst, ked):
+            x_col, x_val = xc[k], x[k]
+            rsum = row_sum[x_col]
+            x[k] = rsum != 0 and x_val / rsum or x_val
+            row_sums_sqs[r, x_col] += x[k] * x[k]
+            row_maxs[r, x_col] = max(row_maxs[r, x_col], x[k])
+
+
+    #return row_max, row_sums_sq
+
+
+
+
+
+# inflation and normalization
+def inflate_norm_t_ez(x, I=1.5, cpu=1):
+
+    xr, xc, x = x.indptr, x.indices, x.data
+    R = xr.size
+
+    chk = R // cpu
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+    starts[-1] = R
+
+
+
+    row_sums = np.zeros((block, R), dtype=np.float32)
+
+    threads = []
+    for idx in prange(block):
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        t = worker(inflate_t, (xr, xc, x, row_sums, Le, Rt, r, I))
+        t.start()
+        threads.append(t)
+
+
+    for t in threads:
+        t.join()
+
+    row_sum = row_sums.sum(0)
+
+    #if 1:
+    #    return row_sum
+
+    row_sums_sqs = np.zeros((block, R), dtype=np.float32)
+    row_maxs = np.zeros((block, R), dtype=np.float32)
+
+    for idx in prange(block):
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        t = worker(norm_t, (xr, xc, x, row_sum, row_sums_sqs, row_maxs, Le, Rt, r, I))
+        t.start()
+        threads.append(t)
+
+
+    for t in threads:
+        t.join()
+
+
+
+
+    #row_maxs, row_sums_sqs = inflate_norm_t(x.indptr, x.indices, x.data, Le, Rt, I=I, cpu=cpu)
+    chaos = row_maxs.max(0) - row_sums_sqs.sum(0)
+    return chaos.max()
+    #return threads
+    #return chaos
+
+
+
+
+
+
+
+
+
+
 # a + b
 @njit(fastmath=True, nogil=True, cache=True)
 def csram_ms(xr, xc, x, yr, yc, y, zr, zc, z):
@@ -920,84 +1110,6 @@ def csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y):
         zptr += ks
 
     return zptr
-
-
-# normalization of matrix
-@njit(fastmath=True, nogil=True, cache=True, parallel=True)
-def inflate_norm_p(xr, xc, x, I=1.5, cpu=1):
-
-    R = xr.size
-
-    chk = R // cpu
-    idxs = np.arange(0, R, chk)
-    block = idxs.size
-
-    starts = np.empty(block+1, np.int64)
-    starts[:block] = idxs
-    starts[-1] = R
-
-    row_sums = np.zeros((block, R), dtype=np.float32)
-    #print 'zptr', block, data.shape, starts
-    #print 'Rp is', starts[-1], xr[starts[-1]]
-    for idx in prange(block):
-        Le, Rt = starts[idx: idx+2]
-        r = Le // chk
-        print 'current_r', r, block
-        #print 'L, R', Le, Rt, starts, chk, block, r
-        #print 'L_R', xr[Le], xr[Rt-1]
-        #print 'L, R', Le, Rt, xr[Le], xr[Rt]
-        Rt = min(R-1, Rt)
-        for i in xrange(Le, Rt):
-            # get ith row of a
-            kst, ked = xr[i], xr[i+1]
-            if kst == ked:
-                continue
-
-            for k in xrange(kst, ked):
-                x_col, x_val = xc[k], x[k]
-                # inflation
-                x_val = np.power(x_val, I)
-                #x[k] = x_val
-                row_sums[r, x_col] += x_val
-
-    row_sum = np.zeros(R, dtype=np.float32)
-    for i in xrange(block):
-        for j in xrange(R):
-            row_sum[j] += row_sums[i, j]
-
-
-    row_sums_sqs = np.zeros((block, R), dtype=np.float32)
-    row_maxs = np.zeros((block, R), dtype=np.float32)
-
-    # normalization and get the chaos
-    for idx in prange(block):
-        Le, Rt = starts[idx: idx+2]
-        r = Le // chk
-        Rt = min(R-1, Rt)
-        for i in xrange(Le, Rt):
-            # get ith row of a
-            kst, ked = xr[i], xr[i+1]
-            if kst == ked:
-                continue
-
-            for k in xrange(kst, ked):
-                x_col, x_val = xc[k], x[k]
-                x_val = np.power(x_val, I)
-                rsum = row_sum[x_col]
-                x[k] = rsum != 0 and x_val / rsum or x_val
-                row_sums_sqs[r, x_col] += x[k] * x[k]
-                row_maxs[r, x_col] = max(row_maxs[r, x_col], x[k])
-
-
-    return row_maxs, row_sums_sqs
-
-# inflation and normalization
-def inflate_norm_ez(x, I=1.5, cpu=1):
-    row_maxs, row_sums_sqs = inflate_norm_p(x.indptr, x.indices, x.data, I=I, cpu=cpu)
-    chaos = row_maxs.max(0) - row_sums_sqs.sum(0)
-    return chaos.max()
-
-
 
 
 
