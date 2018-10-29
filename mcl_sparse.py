@@ -294,12 +294,6 @@ def norm_t(xr, xc, x, row_sum, row_sums_sqs, row_maxs, Le, Rt, r, I=1.5):
             row_maxs[r, x_col] = max(row_maxs[r, x_col], x[k])
 
 
-    #return row_max, row_sums_sq
-
-
-
-
-
 # inflation and normalization
 def inflate_norm_t_ez(x, I=1.5, cpu=1):
 
@@ -331,13 +325,13 @@ def inflate_norm_t_ez(x, I=1.5, cpu=1):
         t.join()
 
     row_sum = row_sums.sum(0)
-
-    #if 1:
-    #    return row_sum
+    del threads
+    gc.collect()
 
     row_sums_sqs = np.zeros((block, R), dtype=np.float32)
     row_maxs = np.zeros((block, R), dtype=np.float32)
 
+    threads = []
     for idx in prange(block):
         Le, Rt = starts[idx: idx+2]
         r = Le // chk
@@ -350,19 +344,11 @@ def inflate_norm_t_ez(x, I=1.5, cpu=1):
         t.join()
 
 
-
-
     #row_maxs, row_sums_sqs = inflate_norm_t(x.indptr, x.indices, x.data, Le, Rt, I=I, cpu=cpu)
     chaos = row_maxs.max(0) - row_sums_sqs.sum(0)
     return chaos.max()
     #return threads
     #return chaos
-
-
-
-
-
-
 
 
 
@@ -6233,8 +6219,8 @@ def topks0(indptr, indices, data, k):
 # parallelization of top k
 @njit(fastmath=True, cache=True, parallel=True)
 def topks_p(indptr, indices, data, k, cpu=1):
-    R = indptr.size
 
+    R = indices.size
     chk = R//cpu
     idxs = np.arange(0, R, chk)
     block = idxs.size
@@ -6242,6 +6228,8 @@ def topks_p(indptr, indices, data, k, cpu=1):
     starts = np.empty(block+1, np.int64)
     starts[:block] = idxs
     starts[-1] = indptr[-1]
+    #starts[-1] = R
+
 
     #nnz = indices.size
     #lo, hi = np.zeros(R, dtype=np.float32), np.zeros(R, dtype=np.float32)
@@ -6254,9 +6242,10 @@ def topks_p(indptr, indices, data, k, cpu=1):
     for idx in prange(block):
 
         print 'block', idx, starts
-        L, R = starts[idx:idx+2]
-        r = L // chk
-        for i in xrange(L, R):
+        Le, Rt = starts[idx:idx+2]
+        r = Le // chk
+
+        for i in xrange(Le, Rt):
             col = indices[i]
             val = data[i]
             if Lo[r, col] > val:
@@ -6313,9 +6302,9 @@ def topks_p(indptr, indices, data, k, cpu=1):
                 visit[i] = 0
 
         for idx in prange(block):
-            L, R = starts[idx:idx+2]
-            r = L // chk
-            for i in xrange(L, R):
+            Le, Rt = starts[idx:idx+2]
+            r = Le // chk
+            for i in xrange(Le, Rt):
                 col = indices[i]
                 if visit[col] == 0:
                     continue
@@ -6354,6 +6343,176 @@ def topks_p(indptr, indices, data, k, cpu=1):
         loop = np.any(visit)
 
     return mi, ct
+
+
+def topks_ez(x, k=10, cpu=1):
+    return topks_p(x.indptr, x.indices, x.data, k, cpu)
+
+
+
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True):
+    p = p < 1 and p or 1./p
+    Rec = R
+
+
+    R = indices.size
+    chk = R // cpu
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+    starts[-1] = indptr[-1]
+    #starts[-1] = R
+
+    Lo, Hi = np.zeros((block, R), dtype=np.float32), np.zeros((block, R), dtype=np.float32)
+
+    ends = np.zeros(block, dtype=np.int64)
+    for idx in prange(block):
+
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+
+        #Rt = min(R-1, Rt)
+        for i in xrange(Le, Rt):
+            col = indices[i]
+            val = data[i]
+            if Lo[r, col] > val:
+                Lo[r, col] = val
+            if Hi[r, col] < val:
+                Hi[r, col] = val
+
+            ends[r] = max(ends[r], col)
+
+    end = ends.max() + 1
+    print 'loops', end, starts
+
+    lo, hi = np.zeros(end, dtype=np.float32), np.zeros(end, dtype=np.float32)
+
+    for i in xrange(block):
+        for j in xrange(end):
+            low = Lo[i, j]
+            if lo[j] > low:
+                lo[j] = low
+
+            up = Hi[i, j]
+            if hi[j] < up:
+                hi[j] = up
+
+    #mi = lo.copy()
+    mi = np.empty(end, dtype=np.float32)
+    mi[:] = p
+
+    # counts
+    ct = np.zeros(end, dtype=np.int32)
+    cts = np.zeros((block, end), dtype=np.int32)
+
+    # percentage
+    Pct = np.zeros(end, dtype=np.float32)
+    Pcts = np.zeros((block, end), dtype=np.float32)
+
+    visit = np.ones(end, dtype=np.int8)
+    loop = np.any(visit)
+    itr = 0
+    while loop:
+
+        #print 'iteration', itr, visit.sum()
+
+        if itr > 0:
+            for i in xrange(end):
+                if visit[i] == 0:
+                    continue
+
+                mi[i] = (hi[i] + lo[i]) / 2.
+                if mi[i] == hi[i] or mi[i] == lo[i]:
+                    visit[i] = 0
+                if visit[i] != 0:
+                    ct[i] = 0
+                    cts[:, i] = 0
+                    Pct[i] = 0
+                    Pcts[:, i] = 0
+                else:
+                    continue
+
+        for idx in prange(block):
+            Le, Rt = starts[idx: idx+2]
+            r = Le // chk
+
+            for i in xrange(Le, Rt):
+                col = indices[i]
+                if visit[col] == 0:
+                    continue
+
+                val = data[i]
+                mid = mi[col]
+
+
+                # get top k
+                if val > mid:
+                    cts[r, col] += 1
+                    Pcts[r, col] += val
+                    #if col == 0:
+                    #    print 'yes', i, val, mid,cts[r, col], Pcts[r, col]
+
+
+        for j in xrange(block):
+            for i in xrange(end):
+                if visit[i] == 0:
+                    continue
+                ct[i] += cts[j, i]
+                Pct[i] += Pcts[j, i]
+
+
+        for i in xrange(end):
+            if visit[i] == 0:
+                continue
+            Ni, Pi = ct[i], Pct[i]
+
+            if i == 0:
+                print 'current_N_P', Ni, Pi, pct, Rec, S, mi[i], '#'
+
+            if Ni < Rec and Pi < pct:
+                hi[i] = mi[i]
+            elif Ni > S:
+                if Ni < Rec and Pi < pct:
+                    hi[i] = min(mi[i], hi[i])
+                else:
+                    #print 'select', mi[i], lo[i]
+                    lo[i] = max(mi[i], lo[i])
+            else:
+                visit[i] = 0
+
+            if lo[i] >= hi[i]:
+                visit[i] = 0
+
+        loop = np.any(visit)
+        itr += 1
+
+    if inplace:
+        for idx in prange(block):
+            L, R = starts[idx:idx+2]
+            r = L // chk
+            for i in xrange(L, R):
+                col = indices[i]
+                val = data[i]
+                thres = mi[col]
+                data[i] = val >= thres and val or 0
+
+
+    return mi, ct
+
+
+
+# prune, select and recover
+def prune_ez(x, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True):
+    p = p < 1 and p or 1./p
+    mi, ct = prune_p(x.indptr, x.indices, x.data, p, pct, R, S, cpu, inplace)
+    return mi, ct
+
+
 
 
 
