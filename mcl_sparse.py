@@ -247,8 +247,8 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
     return row_maxs, row_sums_sqs
 
 # inflation and normalization
-def inflate_norm_ez(x, I=1.5, cpu=1):
-    row_maxs, row_sums_sqs = inflate_norm_p(x.indptr, x.indices, x.data, I=I, cpu=cpu)
+def inflate_norm_ez(x, I=1.5, cpu=1, mem=4):
+    row_maxs, row_sums_sqs = inflate_norm_p(x.indptr, x.indices, x.data, I=I, cpu=cpu, mem=mem)
     chaos = row_maxs.max(0) - row_sums_sqs.sum(0)
     return chaos.max()
 
@@ -6510,9 +6510,9 @@ def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=
 
 
 # prune, select and recover
-def prune_ez(x, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True):
+def prune_ez(x, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
     p = p < 1 and p or 1./p
-    mi, ct = prune_p(x.indptr, x.indices, x.data, p, pct, R, S, cpu, inplace)
+    mi, ct = prune_p(x.indptr, x.indices, x.data, p, pct, R, S, cpu, inplace, mem=mem)
     return mi, ct
 
 
