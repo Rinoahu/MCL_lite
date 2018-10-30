@@ -4651,8 +4651,8 @@ def save_npz_disk(csr, fn):
     fp[:3] = [R, C, a]
 
 
-    b = np.asarray([b], 'int64')
-    b.dtype = 'int32'
+    bc = np.asarray([b], 'int64')
+    bc.dtype = 'int32'
     fp[3: 5] = bc[:2]
 
     start = 5
@@ -15340,10 +15340,198 @@ def mcl(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400
 
 
 
-# merge matix
-def xyz2csr(fn):
-    x = memmap(fn, mode='r+', dtype='int32')
+# bucket sort for int array
+@njit(fastmath=True, nogil=True, parallel=True)
+def bksort(x):
+    N = x.size
+    idx = np.zeros(N, np.int64)
+    end = 0
+    for i in x:
+        idx[i] += 1
+        end = max(end, i)
 
+    end += 1
+    bk = np.empty(end, np.int64)
+    bk[:] = idx[:end]
+    for i in xrange(1, end):
+        bk[i] += bk[i-1]
+
+    bkt = np.empty(end+1, np.int64)
+    bkt[0] = 0
+    bkt[1:] = bk
+
+    #print bkt
+    #print bk
+    for i in xrange(N-1, -1, -1):
+        j = x[i]
+        k = bk[j] - 1
+        idx[k] = i
+        bk[j] = k
+
+    return idx, bkt
+
+
+
+def xyz2csr_ez(x, shape=None, prefix='tmp.npy'):
+    xr = x[:, 0]
+    idx, yr = bksort(xr)
+    if shape == None:
+        shape = (yr[-1], yr[-1])
+
+    fn = prefix.endswith('.npy') and prefix or prefix + '.npy'
+
+    a, b = yr.size, idx.size
+
+    #pass
+    #data = x[idx, 2]
+    #indices = x[idx, 1]
+    indptr = np.asarray(yr, 'int64')
+
+    #a, b = indptr.size, x.size
+    #print 'a', a, 'b', b, 'data', len(data)
+
+    N = 5 + a * 2 + b * 2
+    fp = np.memmap(fn, mode='w+', shape=N, dtype='int32')
+    R, C = shape
+    fp[:3] = [R, C, a]
+
+
+    bc = np.asarray([b], 'int64')
+    bc.dtype = 'int32'
+    fp[3: 5] = bc[:2]
+
+    start = 5
+    end = start + a * 2
+    #indptr.dtype = 'int8'
+    indptr.dtype = 'int32'
+    fp[start: end] = indptr
+
+
+    start = end
+    end = b + start
+    #indices.dtype = 'int8'
+    #fp[start:end] = indices
+    indices = x[:, 1]
+    print 'x shape', x.shape, indices.shape, start, end
+    fp[start:end] = indices[idx]
+
+
+    start = end
+    end = b + start
+
+    data = x[:, 2]
+    #if data.dtype == 'float64':
+    #    data = np.asarray(data, 'float32')
+    #print 'data', data[:100]
+    #if data.dtype != 'int32':
+    #    data.dtype = 'int32'
+    #fp[start:end] = data
+    fp[start:end] = data[idx]
+
+
+    fp._mmap.close()
+    del fp
+
+    #return idx, yr
+    return fn
+
+
+# get initial index of each elem
+@njit(fastmath=True, nogil=True, parallel=True)
+def bksort_start(x):
+    #N = x.size
+    #idx = np.zeros(N, np.int64)
+    end = 0
+    for i in x:
+        end = max(end, i)
+    end += 1
+
+    bk = np.zeros(end+1, np.int64)
+    #bk[0] = 0
+    for i in x:
+        bk[i+1] += 1
+
+    for i in xrange(1, end+1):
+        bk[i] += bk[i-1]
+
+    return bk
+
+# write bksort results
+@njit(fastmath=True, nogil=True, parallel=True)
+def bksort_write(x, y, z, xyz):
+    start = x.copy()
+    N = y.size
+    for i in xrange(N):
+        xi, yi, zi = xyz[i]
+        j = start[xi]
+        y[j] = yi
+        x[j] = xi
+        start[xi] += 1
+
+
+
+
+def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
+    xr = x[:, 0]
+    indptr = bksort_start(xr)
+    if shape == None:
+        N = indptr[-1]
+        shape = (N, N)
+
+    fn = prefix.endswith('.npy') and prefix or prefix + '.npy'
+
+    a, b = indptr.size, x.shape[0]
+
+    #indptr = np.asarray(yr, 'int64')
+
+
+    N = 5 + a * 2 + b * 2
+    fp = np.memmap(fn, mode='w+', shape=N, dtype='int32')
+    R, C = shape
+    fp[:3] = [R, C, a]
+
+
+    bc = np.asarray([b], 'int64')
+    bc.dtype = 'int32'
+    fp[3: 5] = bc[:2]
+
+    start = 5
+    end = start + a * 2
+    indptr.dtype = 'int32'
+    fp[start: end] = indptr
+
+
+    start = end
+    end = b + start
+    #indices.dtype = 'int8'
+    #fp[start:end] = indices
+    #indices = x[:, 1]
+    #fp[start:end] = indices[idx]
+    #bksort_write indptr, indices)
+    y_fp = fp[start: end]
+
+
+    start = end
+    end = b + start
+
+    #data = x[:, 2]
+    #if data.dtype == 'float64':
+    #    data = np.asarray(data, 'float32')
+    #print 'data', data[:100]
+    #if data.dtype != 'int32':
+    #    data.dtype = 'int32'
+    #fp[start:end] = data
+    #fp[start:end] = data[idx]
+    #bksort_write(fp[start: end], indptr, data)
+    z_fp = fp[start: end]
+
+    bksort_write(indptr, y_fp, z_fp, x)
+
+    fp._mmap.close()
+    del fp
+
+    #return idx, yr
+    return fn
 
 
 
