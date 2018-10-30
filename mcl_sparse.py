@@ -312,10 +312,18 @@ def inflate_norm_t_ez(x, I=1.5, cpu=1):
 
     row_sums = np.zeros((block, R), dtype=np.float32)
 
+
+    fn = x.indptr.filename
+    xs = [load_npz_disk(fn) for elem in xrange(block)]:
+
+
     threads = []
     for idx in prange(block):
         Le, Rt = starts[idx: idx+2]
         r = Le // chk
+
+        xr, xc, x = xs[idx].indptr, xs[idx].indices, xs[idx].data
+
         t = worker(inflate_t, (xr, xc, x, row_sums, Le, Rt, r, I))
         t.start()
         threads.append(t)
@@ -335,6 +343,9 @@ def inflate_norm_t_ez(x, I=1.5, cpu=1):
     for idx in prange(block):
         Le, Rt = starts[idx: idx+2]
         r = Le // chk
+
+        xr, xc, x = xs[idx].indptr, xs[idx].indices, xs[idx].data
+
         t = worker(norm_t, (xr, xc, x, row_sum, row_sums_sqs, row_maxs, Le, Rt, r, I))
         t.start()
         threads.append(t)
@@ -344,6 +355,10 @@ def inflate_norm_t_ez(x, I=1.5, cpu=1):
         t.join()
 
 
+    # close xs
+    for xcsr in xs:
+        csr_close(xcsr)
+    
     #row_maxs, row_sums_sqs = inflate_norm_t(x.indptr, x.indices, x.data, Le, Rt, I=I, cpu=cpu)
     chaos = row_maxs.max(0) - row_sums_sqs.sum(0)
     return chaos.max()
@@ -4692,9 +4707,20 @@ def load_npz_disk(fn):
 # close my csr format:
 def csr_close(csr):
     try:
-       csr.indptr._mmap.close()
+        csr.indptr._mmap.close()
     except:
         pass
+
+def csr_reopen(csr):
+    try:
+        csr.indptr._mmap.close()
+        fn = csr.indptr.filename
+        return load_npz_disk(fn)
+    except:
+        pass
+
+
+
 
 
 # load sparse matrix from disk
@@ -6510,7 +6536,7 @@ def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=
 
 
 # prune, select and recover
-def prune_ez(x, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
+def prune_p_ez(x, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
     p = p < 1 and p or 1./p
     mi, ct = prune_p(x.indptr, x.indices, x.data, p, pct, R, S, cpu, inplace, mem=mem)
     return mi, ct
