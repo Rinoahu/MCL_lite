@@ -6493,14 +6493,14 @@ def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=
 
     if inplace:
         for idx in prange(block):
-            L, R = starts[idx:idx+2]
-            r = L // chk
-            for i in xrange(L, R):
+
+            Le, Rt = starts[idx: idx+2]
+            r = Le // chk
+            for i in xrange(Le, Rt):
                 col = indices[i]
                 val = data[i]
                 thres = mi[col]
                 data[i] = val >= thres and val or 0
-
 
     return mi, ct
 
