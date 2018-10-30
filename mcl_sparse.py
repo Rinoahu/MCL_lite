@@ -313,7 +313,7 @@ def inflate_norm_t_ez(x, I=1.5, cpu=1):
     row_sums = np.zeros((block, R), dtype=np.float32)
 
 
-    fn = x.indptr.filename
+    fn = x.filename
     xs = [load_npz_disk(fn) for elem in xrange(block)]
 
 
