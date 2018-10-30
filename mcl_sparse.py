@@ -314,7 +314,7 @@ def inflate_norm_t_ez(x, I=1.5, cpu=1):
 
 
     fn = x.indptr.filename
-    xs = [load_npz_disk(fn) for elem in xrange(block)]:
+    xs = [load_npz_disk(fn) for elem in xrange(block)]
 
 
     threads = []
