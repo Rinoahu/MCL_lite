@@ -4281,7 +4281,7 @@ def mat_split9(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dt
 
 
 # split adj matrix
-def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, scale=True):
+def mat_split10(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, scale=True):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -4449,6 +4449,198 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
     #q2n = mat_reorder(qry, q2n, shape, False, tmp_path)
 
     return q2n, block
+
+
+
+
+
+def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, scale=True):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    os.system('mkdir -p %s' % tmp_path)
+
+    q2n = {}
+    s2n = set()
+
+    lines = 0
+    min_score = 0
+    if mimetypes.guess_type(qry)[1] == 'gzip':
+        f = gzip.open(qry, 'r')
+    elif mimetypes.guess_type(qry)[1] == 'bzip2':
+        f = bz2.BZ2File(qry, 'r')
+    else:
+        f = open(qry, 'r')
+
+    flag = 0
+    for i in f:
+        lines += 1
+        j = i[:-1].split('\t')
+        if len(j) == 3:
+            qid, sid, score = j[:3]
+        elif len(j) > 3:
+            qid, sid, score = j[1:4]
+        else:
+            continue
+
+        min_score = min(min_score, float(score))
+
+        if qid not in q2n:
+            q2n[qid] = flag
+            flag += 1
+
+        if sid not in q2n:
+            s2n.add(sid)
+
+        if qid in s2n:
+            s2n.remove(qid)
+
+
+    f.close()
+    while s2n:
+        sid = s2n.pop()
+        q2n[sid] = flag
+        flag += 1
+
+
+    # np.random.seed(42)
+    # np.random.shuffle(qid_set)
+    N = len(q2n)
+    #factor = scale and 1e9 / N / max_score or 1
+    #factor = scale and 1e2 / max_score or 1
+    factor = 1
+
+    # update chunk
+    print 'memory limit', mem
+    #blk0 = N * prune * 12 * 50 / mem / 1e9
+    #blk1 = (N * prune * cpu * 6e2 / mem / 1e9) ** .5
+    #chunk = N * prune / blk1
+    #block0 = int(N / blk0) + 1
+    #block1 = int(N / blk1) + 1
+    #block = (block0 + block1) // 2
+    block = int(N//cpu) + 1
+
+    #print 'the new chunck size', N, cpu, mem, blk0, blk1, block
+    shape = (N, N)
+
+    #flag = N - 1
+    #flag = 0
+    #for i in q2n:
+    #    # for i in qn:
+    #    q2n[i] = flag
+    #    flag += 1
+    #    #flag -= 1
+    #
+    gc.collect()
+
+    eye = [0] * N
+    _os = {}
+
+    if mimetypes.guess_type(qry)[1] == 'gzip':
+        f = gzip.open(qry, 'r')
+    elif mimetypes.guess_type(qry)[1] == 'bzip2':
+        f = bz2.BZ2File(qry, 'r')
+    else:
+        f = open(qry, 'r')
+
+    pairs = {}
+    flag = 0
+    for i in f:
+        j = i[:-1].split('\t')
+        if len(j) == 3:
+            qid, sid, score = j[:3]
+        elif len(j) > 3:
+            qid, sid, score = j[1:4]
+        else:
+            continue
+
+        z = abs(float(score))
+        if scale:
+            z *= factor
+
+        x, y = map(q2n.get, [qid, sid])
+        out = pack('iif', *[x, y, z])
+        xi, yi = x // block, y // block
+
+        try:
+            pairs[(xi, yi)].append(out)
+        except:
+            pairs[(xi, yi)] = [out]
+
+        if sym == False:
+            # sym
+            out = pack('iif', *[y, x, z])
+            try:
+                pairs[(yi, xi)].append(out)
+            except:
+                pairs[(yi, xi)] = [out]
+            flag += 1
+
+        if eye[x] < z:
+            eye[x] = z
+        if eye[y] < z:
+            eye[y] = z
+
+        flag += 1
+        # write batch to disk
+        if flag % 10000000 == 0:
+            for key, val in pairs.iteritems():
+                if len(val) > 0:
+                    a, b = key
+                    if a == b:
+                        continue
+                    _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+                    _o.writelines(val)
+                    _o.close()
+                    pairs[key] = []
+                else:
+                    continue
+
+    f.close()
+
+    for key, val in pairs.iteritems():
+        if len(val) > 0:
+            a, b = key
+            if a == b:
+                continue
+            _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+            _o.writelines(val)
+            _o.close()
+            pairs[key] = []
+        else:
+            continue
+
+    # set eye of matrix:
+    for i in xrange(N):
+        # break
+        #z = eye[i] + 1
+        z = 0 < eye[i] and eye[i] or 1
+        #z = 1
+        out = pack('iif', *[i, i, z])
+        j = i // block
+        try:
+            pairs[(j, j)].append(out)
+        except:
+            pairs[(j, j)] = [out]
+
+    for key, val in pairs.iteritems():
+        if len(val) > 0:
+            a, b = key
+            _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+            _o.writelines(val)
+            _o.close()
+            pairs[key] = []
+        else:
+            continue
+
+    # reorder the matrix
+    # print 'reorder the matrix'
+    #q2n = mat_reorder(qry, q2n, shape, False, tmp_path)
+
+    return q2n, block
+
+
+
 
 
 # add split method for gpu
@@ -15454,6 +15646,7 @@ def bksort_start(x):
     for i in xrange(1, end+1):
         bk[i] += bk[i-1]
 
+    print '#', bk[:10], '#'
     return bk
 
 # write bksort results
@@ -15462,10 +15655,11 @@ def bksort_write(x, y, z, xyz):
     start = x.copy()
     N = y.size
     for i in xrange(N):
+        #print xyz[i], N
         xi, yi, zi = xyz[i]
         j = start[xi]
         y[j] = yi
-        x[j] = xi
+        z[j] = zi
         start[xi] += 1
 
 
@@ -15474,6 +15668,9 @@ def bksort_write(x, y, z, xyz):
 def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
     xr = x[:, 0]
     indptr = bksort_start(xr)
+
+    print '#indptr', indptr[:10], '#'
+
     if shape == None:
         N = indptr[-1]
         shape = (N, N)
@@ -15500,6 +15697,10 @@ def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
     indptr.dtype = 'int32'
     fp[start: end] = indptr
 
+    indptr.dtype = 'int64'
+
+    print 'indptr', indptr.size, start, end
+
 
     start = end
     end = b + start
@@ -15509,7 +15710,6 @@ def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
     #fp[start:end] = indices[idx]
     #bksort_write indptr, indices)
     y_fp = fp[start: end]
-
 
     start = end
     end = b + start
@@ -15524,6 +15724,10 @@ def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
     #fp[start:end] = data[idx]
     #bksort_write(fp[start: end], indptr, data)
     z_fp = fp[start: end]
+
+
+    print 'y_fp', y_fp.size, y_fp[:10], indptr[:10]
+    print 'z_fp', z_fp.size, z_fp[:10], indptr[:10]
 
     bksort_write(indptr, y_fp, z_fp, x)
 
@@ -15576,8 +15780,33 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
 
         f.close()
 
-    #prune = min(prune, 100. / N)
     shape = (N, N)
+    # convert xyz to csr
+
+    fns = []
+    for i in os.listdir(tmp_path):
+        #print i
+        if not i.endswith('.npz'):
+            continue
+
+        fn = tmp_path + '/' + i
+        
+        fq = np.memmap(fn, mode='r+', dtype='int32')
+        N = fq.size // 3
+        fq._mmap.close()
+
+        fq = np.memmap(fn, mode='r+', shape=(N, 3), dtype='int32')
+
+        prefix = fn + '.npy'
+        fn_csr = xyz2csr_m_ez(fq, shape=shape, prefix=prefix)
+
+        #print 'fq', fq.shape
+
+        fns.append(fn_csr)
+        #xyz2csr_m_ez()
+        fq._mmap.close()
+
+
     # reorder matrix
     #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=False, block=block, cpu=cpu)
     # norm
@@ -16584,7 +16813,9 @@ if __name__ == '__main__':
     elif alg == 'mcl':
         #mcl(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
         #mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
-        mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
+        #mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
+        #    sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
+        mcl_disk(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
             sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
 
     else:
