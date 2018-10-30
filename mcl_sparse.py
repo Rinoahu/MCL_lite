@@ -179,11 +179,11 @@ class worker(Thread):
 
 # normalization of matrix
 @njit(fastmath=True, nogil=True, cache=True, parallel=True)
-def inflate_norm_p(xr, xc, x, I=1.5, cpu=1):
+def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 
     R = xr.size
 
-    chk = R // cpu
+    chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
     idxs = np.arange(0, R, chk)
     block = idxs.size
 
@@ -6354,13 +6354,13 @@ def topks_ez(x, k=10, cpu=1):
 
 
 @njit(fastmath=True, cache=True, parallel=True)
-def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True):
+def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=0):
     p = p < 1 and p or 1./p
     Rec = R
 
 
     R = indices.size
-    chk = R // cpu
+    chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
     idxs = np.arange(0, R, chk)
     block = idxs.size
 
