@@ -6234,7 +6234,8 @@ def topks_p(indptr, indices, data, k, cpu=1):
     #nnz = indices.size
     #lo, hi = np.zeros(R, dtype=np.float32), np.zeros(R, dtype=np.float32)
     #end = 0
-    Lo, Hi = np.zeros((block, R), dtype=np.float32), np.zeros((block, R), dtype=np.float32)
+    RL = indptr.size
+    Lo, Hi = np.zeros((block, RL), dtype=np.float32), np.zeros((block, RL), dtype=np.float32)
 
     #for i in indptr_p
     #end = 0
@@ -6369,7 +6370,8 @@ def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=
     #starts[-1] = R
     print 'starts', starts
 
-    Lo, Hi = np.zeros((block, R), dtype=np.float32), np.zeros((block, R), dtype=np.float32)
+    RL = indptr.size
+    Lo, Hi = np.zeros((block, RL), dtype=np.float32), np.zeros((block, RL), dtype=np.float32)
 
     ends = np.zeros(block, dtype=np.int64)
     for idx in prange(block):
