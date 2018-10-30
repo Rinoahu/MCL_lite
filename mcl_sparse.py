@@ -6367,6 +6367,7 @@ def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=
     starts[:block] = idxs
     starts[-1] = indptr[-1]
     #starts[-1] = R
+    print 'starts', starts
 
     Lo, Hi = np.zeros((block, R), dtype=np.float32), np.zeros((block, R), dtype=np.float32)
 
