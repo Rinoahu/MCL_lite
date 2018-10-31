@@ -15699,9 +15699,6 @@ def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
 
     indptr.dtype = 'int64'
 
-    print 'indptr', indptr.size, start, end
-
-
     start = end
     end = b + start
     #indices.dtype = 'int8'
@@ -15725,10 +15722,6 @@ def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
     #bksort_write(fp[start: end], indptr, data)
     z_fp = fp[start: end]
 
-
-    print 'y_fp', y_fp.size, y_fp[:10], indptr[:10]
-    print 'z_fp', z_fp.size, z_fp[:10], indptr[:10]
-
     bksort_write(indptr, y_fp, z_fp, x)
 
     fp._mmap.close()
@@ -15738,7 +15731,176 @@ def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
     return fn
 
 
+def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None):
 
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    for fnx in fns:
+        x = load_npz_disk(fnx)
+        z = None
+        fntmp = fnx + '_tmp.npy'
+        fnz = fnx + '_z.npy'
+        for fny in fns:
+            y = load_npz_disk(fny)
+            tmp = csrmm_ez_ms_slow_p(x, y, prefix=fntmp, cpu=cpu, disk=True)
+            if type(z) != type(None):
+                ztmp = csram_ez_ms(z, tmp, prefix=fnz+'_tmp.npy', disk=True)
+                csr_close(ztmp)
+                os.system('mv %s_tmp.npy %s'%(fnz, fnz))
+            else:
+                csr_close(tmp)
+                os.system('mv %s %s'%(fntmp, fnz))
+
+            z = load_npz_disk(fnz)
+
+        # update x
+        csr_close(z)
+        os.system('mv %s %s'%(fnz, fnx))
+
+
+def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+
+    chao_mx = -1
+    for fn in fns:
+        x = load_npz_disk(fn)
+        chao = inflate_norm_p_ez(x, I, cpu=cpu)
+        chao_mx = max(chao_mx, chao)
+
+    return chao_mx
+
+
+
+def prune_disk(qry, tmp_path=None, p=1e-4, pct=.9, R=800, S=700, inplace=1, cpu=1, mem=4):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    for fn in fns:
+        x = load_npz_disk(fn)
+        mi, ct = prune_p_ez(x, p=p, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=4)
+
+
+
+# get connect comp from graph
+@njit(fastmath=True, nogil=True, parallel=True, cache=True)
+def get_connect(indptr, indices, data):
+    N = indptr.size - 1
+    #M = indices.size
+
+    labels = -np.ones(N, dtype=np.int32)
+    #stack = -np.ones(M, dtype=np.int32)
+    stack = -np.ones(N, dtype=np.int32)
+
+    label = 0
+    for i in xrange(N-1):
+        st, ed = indptr[i:i+2]
+        if st == ed:
+            continue
+        ptr = -1
+        asigned = 0
+        for j in xrange(st, ed):
+            val = data[j]
+            col = indices[j]
+            if labels[col] != -1:
+                asigned = 1
+                break
+                #continue
+            elif val != 0: 
+                ptr += 1
+                stack[ptr] = col
+                labels[col] = label
+            else:
+                continue
+
+        #print 'ptr is', ptr, i, stack[:ptr+1+1]
+        if asigned == 1:
+            continue
+
+        #print 'label', label
+        #flag = 0
+        #old_ptr = ptr
+        while ptr >= 0:
+            #print ptr, N, i, '#'
+            #flag += 1
+            col = stack[ptr]
+            ptr -= 1
+            #if labels[col] == -1:
+            #    update = 1
+            #    labels[col] = label
+            #if labels[col] == label:
+            #    continue
+            #else:
+            #    labels[col] = label
+            st, ed = indptr[col: col+2]
+            for j in xrange(st, ed):
+                val = data[j]
+                col_j = indices[j]
+                if val != 0 and labels[col_j] == -1: 
+                    ptr += 1
+                    stack[ptr] = col_j
+                    labels[col_j] = label
+                else:
+                    continue
+
+        #print 'found', i, ptr, flag, '#'
+        if asigned == 0:
+            label += 1
+        #print 'label', label, '#'
+
+    return label, labels
+
+def get_connect_ez(x):
+    return get_connect(x.indptr, x.indices, x.data)
+
+def get_connect_disk(qry, tmp_path):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+
+    g = None
+    cs = None
+    for fn in fns:
+        print 'fn', fn
+        try:
+            #g0 = load_matrix(fn, csr=True)
+            g0 = load_npz_disk(fn)
+            print 'g0', g0.nnz
+        except:
+            g0 = None
+            continue
+
+        try:
+            g += g0
+        except:
+            g = g0
+
+        if g.nnz > 1e8:
+            #ci = csgraph.connected_components(g)
+            ci = get_connect_ez(g)
+
+            try:
+                cs = merge_connected(cs, ci)
+            except:
+                cs = ci
+            g = None
+
+    if type(g) != type(None):
+        #ci = csgraph.connected_components(g)
+        ci = get_connect_ez(g)
+
+        try:
+            cs = merge_connected(cs, ci)
+        except:
+            cs = ci
+
+    return cs
 
 
 
@@ -15753,7 +15915,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         os.system('rm -rf %s/*' % tmp_path)
 
         q2n, block = mat_split(qry, tmp_path=tmp_path,
-                               chunk=chunk, cpu=cpu, sym=sym, mem=mem)
+                               chunk=chunk, cpu=1, sym=sym, mem=mem)
 
         N = len(q2n)
 
@@ -15807,6 +15969,53 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         fq._mmap.close()
 
 
+    #norm(qry, shape, tmp_path, csr=False, cpu=cpu, prune=prune, diag=False)
+    inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu)
+    for it in xrange(itr):
+        print 'iteration', it
+        expand_disk(qry, shape=shape, tmp_path=tmp_path)
+        chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu)
+        if chao < 1e-3:
+            break
+        prune_disk(qry, tmp_path=tmp_path, cpu=cpu)
+
+
+    cs = get_connect_disk(qry, tmp_path=tmp_path)
+    #print 'cs', cs[0], cs[1][:10]
+
+    f = open(tmp_path + '_dict.pkl', 'rb')
+    q2n = cPickle.load(f)
+    f.close()
+    os.system('rm %s_dict.pkl' % tmp_path)
+
+    groups = {}
+    for k, v in q2n.iteritems():
+        c = cs[1][v]
+        try:
+            groups[c].append(k)
+        except:
+            groups[c] = [k]
+
+    del c
+    gc.collect()
+    if outfile and type(outfile) == str:
+        _o = open(outfile, 'w')
+    for v in groups.itervalues():
+        out = '\t'.join(v)
+        if outfile == None:
+            print out
+        else:
+            _o.writelines([out, '\n'])
+    if outfile and type(outfile) == str:
+        _o.close()
+
+
+
+
+
+
+
+    raise SystemExit()
     # reorder matrix
     #q2n, fns = mat_reorder(qry, q2n, shape=shape, chunk=chunk, csr=False, block=block, cpu=cpu)
     # norm
