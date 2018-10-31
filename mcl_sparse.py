@@ -1129,7 +1129,7 @@ def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
     D = yr.size
 
 
-    chk = R // cpu
+    chk = max(R // cpu, 1<<24)
     idxs = np.arange(0, R, chk)
     block = idxs.size
 
@@ -1153,6 +1153,7 @@ def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
     for idx in prange(block):
         Le, Rt = starts[idx: idx+2]
         r = Le // chk
+        r = idx
         #print 'L, R', Le, Rt, starts, chk, block, r
         #print 'L_R', xr[Le], xr[Rt-1]
         #print 'L, R', Le, Rt, xr[Le], xr[Rt]
@@ -1433,7 +1434,7 @@ def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     nnz = z.size
 
     #print '2pass_cpu', cpu, z.size
-    chk = R // cpu
+    chk = max(R // cpu, 1<<24)
     idxs = np.arange(0, R, chk)
     block = idxs.size
 
@@ -1454,6 +1455,7 @@ def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     for idx in prange(block):
         Le, Rt = starts[idx: idx+2]
         r = Le // chk
+        r = idx
         #print 'idx', Le, Rt
         Rt = min(R-1, Rt)
         for i in xrange(Le, Rt):
@@ -1516,6 +1518,10 @@ def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
             zr[i+1] = zptr[r]
             #print 'after', zptr[r], zc.size
+    for i in xrange(1, zr.size):
+        if zr[i] < zr[i-1]:
+            zr[i] = zr[i-1]
+
 
     #print 'the zptr hello', zptr
     flag = zptr
@@ -6576,8 +6582,8 @@ def topks_ez(x, k=10, cpu=1):
 
 
 @njit(fastmath=True, cache=True, parallel=True)
-def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=0):
-    p = p < 1 and p or 1./p
+def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=0):
+    prune = prune < 1 and prune or 1./prune
     Rec = R
 
 
@@ -6629,7 +6635,7 @@ def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=
 
     #mi = lo.copy()
     mi = np.empty(end, dtype=np.float32)
-    mi[:] = p
+    mi[:] = prune
 
     # counts
     ct = np.zeros(end, dtype=np.int32)
@@ -6732,9 +6738,9 @@ def prune_p(indptr, indices, data, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=
 
 
 # prune, select and recover
-def prune_p_ez(x, p=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
-    p = p < 1 and p or 1./p
-    mi, ct = prune_p(x.indptr, x.indices, x.data, p, pct, R, S, cpu, inplace, mem=mem)
+def prune_p_ez(x, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
+    prune = prune < 1 and prune or 1./prune
+    mi, ct = prune_p(x.indptr, x.indices, x.data, prune, pct, R, S, cpu, inplace, mem=mem)
     return mi, ct
 
 
@@ -15731,7 +15737,7 @@ def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
     return fn
 
 
-def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None):
+def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
 
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
@@ -15745,6 +15751,14 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None):
         for fny in fns:
             y = load_npz_disk(fny)
             tmp = csrmm_ez_ms_slow_p(x, y, prefix=fntmp, cpu=cpu, disk=True)
+
+            #tmp0 = csrmm_ez_ms_slow_p(x, y, prefix=fntmp + '_tmp0.npy', cpu=2, disk=True)
+            #dif = tmp0 - tmp
+            #print 'diff', cpu, 2, dif.nnz, dif.max(), dif.min()
+            #print 'tmp', tmp.nnz, 'tmp0', tmp0.nnz
+            #csr_close(tmp0)
+            #os.system('rm %s'%(fntmp+'_tmp0.npy'))
+
             if type(z) != type(None):
                 ztmp = csram_ez_ms(z, tmp, prefix=fnz+'_tmp.npy', disk=True)
                 csr_close(ztmp)
@@ -15776,14 +15790,14 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
 
 
 
-def prune_disk(qry, tmp_path=None, p=1e-4, pct=.9, R=800, S=700, inplace=1, cpu=1, mem=4):
+def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, cpu=1, mem=4):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
     fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
     for fn in fns:
         x = load_npz_disk(fn)
-        mi, ct = prune_p_ez(x, p=p, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=4)
+        mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=4)
 
 
 
@@ -15905,7 +15919,7 @@ def get_connect_disk(qry, tmp_path):
 
 
 # memmap based mcl, no memory limit
-def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5 * 10**7, outfile=None, sym=False, rsm=False, mem=4):
+def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, pct=.9, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5 * 10**7, outfile=None, sym=False, rsm=False, mem=4):
 
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
@@ -15968,16 +15982,18 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         #xyz2csr_m_ez()
         fq._mmap.close()
 
+        os.system('rm %s'%fn)
 
     #norm(qry, shape, tmp_path, csr=False, cpu=cpu, prune=prune, diag=False)
     inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu)
     for it in xrange(itr):
         print 'iteration', it
-        expand_disk(qry, shape=shape, tmp_path=tmp_path)
+        expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
         chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu)
         if chao < 1e-3:
             break
-        prune_disk(qry, tmp_path=tmp_path, cpu=cpu)
+        #prune_disk(qry, tmp_path=tmp_path, cpu=cpu)
+        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1)
 
 
     cs = get_connect_disk(qry, tmp_path=tmp_path)
