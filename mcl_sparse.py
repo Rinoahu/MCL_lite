@@ -187,7 +187,7 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 
 
     cpu = max(1, xc.size // (1<<24))
-    chk = R // cpu)
+    chk = R // cpu
 
 
 
@@ -204,7 +204,7 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
     for idx in prange(block):
         Le, Rt = starts[idx: idx+2]
         r = Le // chk
-        print 'current_r', r, block
+        #print 'current_r', r, block
         #print 'L, R', Le, Rt, starts, chk, block, r
         #print 'L_R', xr[Le], xr[Rt-1]
         #print 'L, R', Le, Rt, xr[Le], xr[Rt]
@@ -1142,7 +1142,7 @@ def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
     #chk = max(R // cpu, 1<<24)
 
     cpu = max(1, xc.size // (1<<24))
-    chk = R // cpu)
+    chk = R // cpu
 
 
     idxs = np.arange(0, R, chk)
@@ -1453,7 +1453,7 @@ def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = R // cpu
 
     cpu = max(1, xc.size // (1<<24))
-    chk = R // cpu)
+    chk = R // cpu
 
     idxs = np.arange(0, R, chk)
     block = idxs.size
@@ -1631,7 +1631,7 @@ def csrmm_ez_ms_slow_p(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=
     #nnz = csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y)
     zptr = csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=cpu)
     nnz = zptr[-1]
-    print '1st pass', nnz, zptr
+    #print '1st pass', nnz, zptr
 
     if prefix == None:
         tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
@@ -1666,7 +1666,7 @@ def csrmm_ez_ms_slow_p(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=
         zr = fp[start: end]
         zr.dtype = 'int64'
 
-        print 'zr size', zr.size, ac
+        #print 'zr size', zr.size, ac
 
         start = end
         end = bc + start
@@ -1683,7 +1683,7 @@ def csrmm_ez_ms_slow_p(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=
         zc = np.empty(nnz,  dtype=xc.dtype)
         z = np.empty(nnz, dtype=x.dtype)
 
-    print 'a nnz', a.nnz, 'b nnz', b.nnz
+    #print 'a nnz', a.nnz, 'b nnz', b.nnz
 
     zptr, flag = csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
 
@@ -6619,8 +6619,8 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
 
     #base = 10000
-    cpu = max(1, xc.size // (1<<24))
-    chk = R // cpu)
+    cpu = max(1, indices.size // (1<<24))
+    chk = R // cpu
 
 
     idxs = np.arange(0, R, chk)
@@ -6736,8 +6736,8 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
                 continue
             Ni, Pi = ct[i], Pct[i]
 
-            if i == 0:
-                print 'current_N_P', Ni, Pi, pct, Rec, S, mi[i], '#'
+            #if i == 0:
+            #    print 'current_N_P', Ni, Pi, pct, Rec, S, mi[i], '#'
 
             if Ni < Rec and Pi < pct:
                 hi[i] = mi[i]
