@@ -15796,7 +15796,7 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
     return chao_mx
 
 
-
+# prune on disk
 def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, cpu=1, mem=4):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
@@ -15995,7 +15995,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu)
     for it in xrange(itr):
         print 'iteration', it
-        print 'expansion'
+        print 'expansion', 'cpu', cpu
         expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
         print 'inflate norm'
         chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu)
