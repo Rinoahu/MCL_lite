@@ -4545,7 +4545,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
     factor = 1
 
     # update chunk
-    print 'memory limit', mem
+    # print 'memory limit', mem
     #blk0 = N * prune * 12 * 50 / mem / 1e9
     #blk1 = (N * prune * cpu * 6e2 / mem / 1e9) ** .5
     #chunk = N * prune / blk1
@@ -6630,7 +6630,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     starts[:block] = idxs
     starts[-1] = indptr[-1]
     #starts[-1] = R
-    print 'starts', starts
+    #print 'starts', starts
 
     RL = indptr.size
     Lo, Hi = np.zeros((block, RL), dtype=np.float32), np.zeros((block, RL), dtype=np.float32)
@@ -6653,7 +6653,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
             ends[r] = max(ends[r], col)
 
     end = ends.max() + 1
-    print 'loops', end, starts
+    #print 'loops', end, starts
 
     lo, hi = np.zeros(end, dtype=np.float32), np.zeros(end, dtype=np.float32)
 
@@ -15686,7 +15686,7 @@ def bksort_start(x):
     for i in xrange(1, end+1):
         bk[i] += bk[i-1]
 
-    print '#', bk[:10], '#'
+    #print '#', bk[:10], '#'
     return bk
 
 # write bksort results
@@ -15704,12 +15704,12 @@ def bksort_write(x, y, z, xyz):
 
 
 
-
+# mmap based xyz to csr
 def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
     xr = x[:, 0]
     indptr = bksort_start(xr)
 
-    print '#indptr', indptr[:10], '#'
+    #print '#indptr', indptr[:10], '#'
 
     if shape == None:
         N = indptr[-1]
