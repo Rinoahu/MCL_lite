@@ -4467,7 +4467,8 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
     os.system('mkdir -p %s' % tmp_path)
 
     q2n = {}
-    s2n = set()
+    #s2n = set()
+    s2n = {}
 
     lines = 0
     min_score = 0
@@ -4496,10 +4497,16 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
             flag += 1
 
         if sid not in q2n:
-            s2n.add(sid)
+            #s2n.add(sid)
+            s2n[sid] = None
 
         if qid in s2n:
-            s2n.remove(qid)
+            #s2n.remove(qid)
+            del s2n[qid]
+
+        if lines % 100000 == 0:
+            gc.collect()
+
 
 
     f.close()
