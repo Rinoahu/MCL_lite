@@ -15995,11 +15995,14 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu)
     for it in xrange(itr):
         print 'iteration', it
+        print 'expansion'
         expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
+        print 'inflate norm'
         chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu)
         if chao < 1e-3:
             break
         #prune_disk(qry, tmp_path=tmp_path, cpu=cpu)
+        print 'prune'
         prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1)
 
 
