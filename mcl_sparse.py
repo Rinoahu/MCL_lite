@@ -4520,6 +4520,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
             del s2n[qid]
 
         if lines % 100000 == 0:
+            print 'dict_size', len(q2n), len(s2n)
             gc.collect()
 
 
@@ -4611,7 +4612,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
 
         flag += 1
         # write batch to disk
-        if flag % 10000000 == 0:
+        if flag % 1000000 == 0:
             for key, val in pairs.iteritems():
                 if len(val) > 0:
                     a, b = key
@@ -4638,7 +4639,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
         else:
             continue
 
-    # set eye of matrix:
+    # set diag or self-loop
     for i in xrange(N):
         # break
         #z = eye[i] + 1
