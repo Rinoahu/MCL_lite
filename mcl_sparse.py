@@ -1130,7 +1130,10 @@ def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
 
     #chk = max(R // cpu, 1<<24)
-    chk = R // cpu
+
+    cpu = 1. * xc.size / (1<<24)
+    chk = int(R // cpu) + 1
+
     idxs = np.arange(0, R, chk)
     block = idxs.size
 
@@ -1436,7 +1439,11 @@ def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
     #print '2pass_cpu', cpu, z.size
     #chk = max(R // cpu, 1<<24)
-    chk = R // cpu
+    #chk = R // cpu
+
+    cpu = 1. * xc.size / (1<<24)
+    chk = int(R // cpu) + 1
+
     idxs = np.arange(0, R, chk)
     block = idxs.size
 
