@@ -15776,22 +15776,20 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
-    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy')]
+
+
+    fnxzs = []
     for fnx in fns:
         x = load_npz_disk(fnx)
         z = None
         fntmp = fnx + '_tmp.npy'
         fnz = fnx + '_z.npy'
+        fnxzs.append([fnz, fnx])
         for fny in fns:
             y = load_npz_disk(fny)
             tmp = csrmm_ez_ms_slow_p(x, y, prefix=fntmp, cpu=cpu, disk=True)
-
-            #tmp0 = csrmm_ez_ms_slow_p(x, y, prefix=fntmp + '_tmp0.npy', cpu=2, disk=True)
-            #dif = tmp0 - tmp
-            #print 'diff', cpu, 2, dif.nnz, dif.max(), dif.min()
-            #print 'tmp', tmp.nnz, 'tmp0', tmp0.nnz
-            #csr_close(tmp0)
-            #os.system('rm %s'%(fntmp+'_tmp0.npy'))
 
             if type(z) != type(None):
                 ztmp = csram_ez_ms(z, tmp, prefix=fnz+'_tmp.npy', disk=True)
@@ -15805,14 +15803,79 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
 
         # update x
         csr_close(z)
+        del z
+        #os.system('mv %s %s'%(fnz, fnx))
+
+
+    # rename the new file
+    for fnz, fnx in fnxzs:
         os.system('mv %s %s'%(fnz, fnx))
+
+
+
+def regularize_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
+
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy')]
+    fnmg = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+
+    #print 'fns', fns, 'fnmg 0', fnmg
+
+    if fnmg:
+        first = 0
+    else:
+        fnmg = fns
+        first = 1
+
+    #print 'fns', fns, 'fnmg 1', fnmg
+
+    fnxzs = []
+    for fnx in fns:
+        x = load_npz_disk(fnx)
+        z = None
+        fntmp = fnx + '_tmp.npy'
+        fnz = fnx + '_z.npy'
+        fnxzs.append([fnz, fnx])
+        for fny in fnmg:
+            y = load_npz_disk(fny)
+            tmp = csrmm_ez_ms_slow_p(x, y, prefix=fntmp, cpu=cpu, disk=True)
+
+            if type(z) != type(None):
+                ztmp = csram_ez_ms(z, tmp, prefix=fnz+'_tmp.npy', disk=True)
+                csr_close(ztmp)
+                os.system('mv %s_tmp.npy %s'%(fnz, fnz))
+            else:
+                csr_close(tmp)
+                os.system('mv %s %s'%(fntmp, fnz))
+
+            z = load_npz_disk(fnz)
+
+        # update x
+        csr_close(z)
+        del z
+        #os.system('mv %s %s'%(fnz, fnx))
+
+    #print 'fnxzs', fnxzs
+    #raise SystemExit()
+    # rename the new file
+    for fnz, fnx in fnxzs:
+        if first:
+            os.system('mv %s %s_Mg.npy'%(fnx, fnx))
+        else:
+            os.system('mv %s %s'%(fnz, fnx))
+
+
 
 
 def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
-    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy')]
+
 
     chao_mx = -1
     for fn in fns:
@@ -15828,7 +15891,10 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
-    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy')]
+
+
     for fn in fns:
         x = load_npz_disk(fn)
         mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=4)
@@ -15910,7 +15976,9 @@ def get_connect_disk(qry, tmp_path):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
-    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy')]
+
 
     g = None
     cs = None
@@ -15953,7 +16021,7 @@ def get_connect_disk(qry, tmp_path):
 
 
 # memmap based mcl, no memory limit
-def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, pct=.9, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5 * 10**7, outfile=None, sym=False, rsm=False, mem=4):
+def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, pct=.9, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5 * 10**7, outfile=None, sym=False, rsm=False, mem=4, alg='mcl'):
 
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
@@ -16022,12 +16090,19 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu)
     for it in xrange(itr):
         print 'iteration', it
-        print 'expansion', 'cpu', cpu
-        expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
+        if alg == 'mcl':
+            print 'expansion', cpu
+            expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
+        else:
+            print 'regularize', cpu
+            regularize_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
+
         print 'inflate norm'
         chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu)
-        if chao < 1e-3:
+        if chao < 1e-3 and it > 0:
             break
+
+        print 'chao', chao
         #prune_disk(qry, tmp_path=tmp_path, cpu=cpu)
         print 'prune'
         prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1)
@@ -17083,8 +17158,12 @@ if __name__ == '__main__':
     else:
         #mcl(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
         #mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
-        rmcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
-             sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
+        #rmcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
+        #     sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
+
+        mcl_disk(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
+            sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv, alg='rmcl')
+
 
         #mcl_lite(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym)
 
