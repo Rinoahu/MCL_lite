@@ -15801,6 +15801,7 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
 
             z = load_npz_disk(fnz)
 
+        print os.listdir(tmp_path)
         # update x
         csr_close(z)
         del z
@@ -15809,7 +15810,9 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
 
     # rename the new file
     for fnz, fnx in fnxzs:
+        print 'before', os.listdir(tmp_path)
         os.system('mv %s %s'%(fnz, fnx))
+        print 'after', os.listdir(tmp_path)
 
 
 
