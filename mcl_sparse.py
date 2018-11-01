@@ -185,10 +185,8 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 
     #chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
 
-
-    cpu = max(1, xc.size // (1<<24))
+    #cpu = max(1, xc.size // (1<<24))
     chk = R // cpu
-
 
 
     idxs = np.arange(0, R, chk)
@@ -1141,7 +1139,7 @@ def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     #chk = max(R // cpu, 1<<24)
 
-    cpu = max(1, xc.size // (1<<24))
+    #cpu = max(1, xc.size // (1<<24))
     chk = R // cpu
 
 
@@ -1452,7 +1450,7 @@ def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    cpu = max(1, xc.size // (1<<24))
+    #cpu = max(1, xc.size // (1<<24))
     chk = R // cpu
 
     idxs = np.arange(0, R, chk)
@@ -6619,8 +6617,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     R = indices.size
     #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
 
-    #base = 10000
-    cpu = max(1, indices.size // (1<<24))
+    #cpu = max(1, indices.size // (1<<24))
     chk = R // cpu
 
 
@@ -16139,6 +16136,33 @@ def get_connect_disk(qry, tmp_path):
 
     return cs
 
+# convert xyz to csr
+def xyz2csr_t(xyzs):
+    tmp_path, i, shape = xyzs
+    #for i in os.listdir(tmp_path):
+    #    #print i
+    #    if not i.endswith('.npz'):
+    #        continue
+
+
+    fn = tmp_path + '/' + i
+        
+    fq = np.memmap(fn, mode='r+', dtype='int32')
+    N = fq.size // 3
+    fq._mmap.close()
+
+    fq = np.memmap(fn, mode='r+', shape=(N, 3), dtype='int32')
+
+    prefix = fn + '.npy'
+    fn_csr = xyz2csr_m_ez(fq, shape=shape, prefix=prefix)
+
+    #fns.append(fn_csr)
+    #xyz2csr_m_ez()
+    fq._mmap.close()
+
+    os.system('rm %s'%fn)
+    return fn_csr
+
 
 
 # memmap based mcl, no memory limit
@@ -16182,30 +16206,37 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     shape = (N, N)
     # convert xyz to csr
 
-    fns = []
-    for i in os.listdir(tmp_path):
-        #print i
-        if not i.endswith('.npz'):
-            continue
 
-        fn = tmp_path + '/' + i
+    #fns = []
+    #for i in os.listdir(tmp_path):
+    #    #print i
+    #    if not i.endswith('.npz'):
+    #        continue
+
+    #   fn = tmp_path + '/' + i
         
-        fq = np.memmap(fn, mode='r+', dtype='int32')
-        N = fq.size // 3
-        fq._mmap.close()
+    #    fq = np.memmap(fn, mode='r+', dtype='int32')
+    #    N = fq.size // 3
+    #    fq._mmap.close()
 
-        fq = np.memmap(fn, mode='r+', shape=(N, 3), dtype='int32')
+    #    fq = np.memmap(fn, mode='r+', shape=(N, 3), dtype='int32')
 
-        prefix = fn + '.npy'
-        fn_csr = xyz2csr_m_ez(fq, shape=shape, prefix=prefix)
+    #    prefix = fn + '.npy'
+    #    fn_csr = xyz2csr_m_ez(fq, shape=shape, prefix=prefix)
 
-        #print 'fq', fq.shape
+    #    #print 'fq', fq.shape
 
-        fns.append(fn_csr)
-        #xyz2csr_m_ez()
-        fq._mmap.close()
+    #    fns.append(fn_csr)
+    #    #xyz2csr_m_ez()
+    #    fq._mmap.close()
 
-        os.system('rm %s'%fn)
+    #    os.system('rm %s'%fn)
+
+    
+    xyzs = [[tmp_path, elem, shape] for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
+
+    fns = Parallel(n_jobs=cpu)(delayed(xyz2csr_t)(xyz) for xyz in xyzs)
+
 
     #norm(qry, shape, tmp_path, csr=False, cpu=cpu, prune=prune, diag=False)
     inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu)
