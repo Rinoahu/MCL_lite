@@ -183,7 +183,13 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 
     R = xr.size
 
-    chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
+    #chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
+
+    cpu = 1. * xc.size / (1<<24)
+    chk = int(R // cpu) + 1
+
+
+
     idxs = np.arange(0, R, chk)
     block = idxs.size
 
@@ -6604,7 +6610,12 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
 
 
     R = indices.size
-    chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
+    #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
+
+    cpu = 1. * xc.size / (1<<24)
+    chk = int(R // cpu) + 1
+
+
     idxs = np.arange(0, R, chk)
     block = idxs.size
 
