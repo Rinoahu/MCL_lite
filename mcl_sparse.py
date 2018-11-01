@@ -15829,16 +15829,13 @@ def expand_t(xyz):
 
         z = load_npz_disk(fnz)
 
-    print os.listdir(tmp_path)
+    #print os.listdir(tmp_path)
     # update x
     csr_close(z)
     del z
     #os.system('mv %s %s'%(fnz, fnx))
 
     return [fnz, fnx]
-
-
-
 
 
 
@@ -15850,7 +15847,7 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
     #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
     fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy')]
 
-    fnxzs = Parallel(n_jobs=cpu)(delayed(regularize_t)([fnx, fns]) for fnx in fns)
+    fnxzs = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fns]) for fnx in fns)
 
     #fnxzs = []
     #for fnx in fns:
