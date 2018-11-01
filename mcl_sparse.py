@@ -4511,7 +4511,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
 
     f.close()
     while s2n:
-        sid = s2n.pop()
+        sid = s2n.popitem()[0]
         q2n[sid] = flag
         flag += 1
 
