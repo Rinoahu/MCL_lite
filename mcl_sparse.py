@@ -185,8 +185,9 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 
     #chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
 
-    cpu = 1. * xc.size / (1<<24)
-    chk = int(R // cpu) + 1
+
+    cpu = max(1, xc.size // (1<<24))
+    chk = R // cpu)
 
 
 
@@ -307,7 +308,10 @@ def inflate_norm_t_ez(x, I=1.5, cpu=1):
     xr, xc, x = x.indptr, x.indices, x.data
     R = xr.size
 
+
     chk = R // cpu
+
+
     idxs = np.arange(0, R, chk)
     block = idxs.size
 
@@ -1137,8 +1141,9 @@ def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     #chk = max(R // cpu, 1<<24)
 
-    cpu = 1. * xc.size / (1<<24)
-    chk = int(R // cpu) + 1
+    cpu = max(1, xc.size // (1<<24))
+    chk = R // cpu)
+
 
     idxs = np.arange(0, R, chk)
     block = idxs.size
@@ -1447,8 +1452,8 @@ def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    cpu = 1. * xc.size / (1<<24)
-    chk = int(R // cpu) + 1
+    cpu = max(1, xc.size // (1<<24))
+    chk = R // cpu)
 
     idxs = np.arange(0, R, chk)
     block = idxs.size
@@ -6613,8 +6618,9 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     R = indices.size
     #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
 
-    cpu = 1. * xc.size / (1<<24)
-    chk = int(R // cpu) + 1
+    #base = 10000
+    cpu = max(1, xc.size // (1<<24))
+    chk = R // cpu)
 
 
     idxs = np.arange(0, R, chk)
