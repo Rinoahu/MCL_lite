@@ -6628,6 +6628,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     prune = prune < 1 and prune or 1./prune
     Rec = R
 
+    print 'prune_p, R, S', prune, pct, R, S
 
     R = indices.size
     #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
@@ -6812,6 +6813,9 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
 # prune, select and recover
 def prune_p_ez(x, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
     prune = prune < 1 and prune or 1./prune
+
+    print 'prune_p_ez, R, S', prune, pct, R, S
+
     mi, ct = prune_p(x.indptr, x.indices, x.data, prune, pct, R, S, cpu, inplace, mem=mem)
     return mi, ct
 
@@ -16120,6 +16124,7 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
 def prune_t(xyzs):
     fn, prune, pct, R, S, cpu, inplace, mem = xyzs
     x = load_npz_disk(fn)
+    print 'prune_t, R, S', prune, pct, R, S
     mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
 
 
@@ -16136,6 +16141,7 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
     #    x = load_npz_disk(fn)
     #    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
     #Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, cpu, inplace, mem]) for fn in fns)
+    print 'prune_disk, R, S', prune, pct, R, S
     map(prune_t, [[fn, prune, pct, R, S, cpu, inplace, mem] for fn in fns])
 
 
@@ -17411,8 +17417,7 @@ if __name__ == '__main__':
         raise SystemExit()
 
     try:
-        qry, ifl, cpu, bch, ofn, sym, gpu, rsm, mem, pru, slc, rcv, PRU = args['-i'], float(eval(args['-I'])), int(eval(args['-a'])), int(eval(args['-b'])), args['-o'], args['-d'], int(
-            eval(args['-g'])), args['-r'], float(eval(args['-m'])), float(eval(args['-p'])), int(eval(args['-S'])), int(eval(args['-R'])), float(eval(args['-P']))
+        qry, ifl, cpu, bch, ofn, sym, gpu, rsm, mem, pru, slc, rcv, PRU = args['-i'], float(eval(args['-I'])), int(eval(args['-a'])), int(eval(args['-b'])), args['-o'], args['-d'], int(eval(args['-g'])), args['-r'], float(eval(args['-m'])), float(eval(args['-p'])), int(eval(args['-S'])), int(eval(args['-R'])), float(eval(args['-P']))
         alg = args['-A']
         pru = PRU >= 1 and 1. / PRU or pru
         if sym.lower().startswith('f'):
