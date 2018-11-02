@@ -14885,10 +14885,10 @@ def get_connect(fns):
     #cs = csgraph.connected_components(g)
     cs = None
     for fn in fns:
-        print 'fn', fn
+        #print 'fn', fn
         try:
             g0 = load_matrix(fn, csr=True)
-            print 'g0', g0.nnz
+            #print 'g0', g0.nnz
         except:
             g0 = None
             continue
@@ -16183,11 +16183,11 @@ def get_connect_disk(qry, tmp_path):
     g = None
     cs = None
     for fn in fns:
-        print 'fn', fn
+        #print 'fn', fn
         try:
             #g0 = load_matrix(fn, csr=True)
             g0 = load_npz_disk(fn)
-            print 'g0', g0.nnz
+            #print 'g0', g0.nnz
         except:
             g0 = None
             continue
