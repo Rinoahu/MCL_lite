@@ -6624,7 +6624,7 @@ def topks_ez(x, k=10, cpu=1):
 
 
 @njit(fastmath=True, cache=True, parallel=True)
-def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=0):
+def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
     prune = prune < 1 and prune or 1./prune
     Rec = R
 
@@ -6705,11 +6705,12 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     Pcts = np.zeros((block, end), dtype=np.float32)
 
     visit = np.ones(end, dtype=np.int8)
-    inf_p = np.inf
-    inf_n = -inf_p
-    for i in xrange(end):
-        if lo[i] == inf_n or hi[i] == inf_p:
-            visit[i] = 0
+
+    #inf_p = np.inf
+    #inf_n = -inf_p
+    #for i in xrange(end):
+    #    if lo[i] == inf_n or hi[i] == inf_p:
+    #        visit[i] = 0
 
     loop = np.any(visit)
     itr = 0
