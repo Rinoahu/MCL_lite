@@ -186,7 +186,9 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
     #chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
 
     #cpu = max(1, xc.size // (1<<24))
-    chk = R // cpu
+    cpu = max(1, xc.size // (1<<26))
+
+    chk = max(1, R // cpu)
 
 
     idxs = np.arange(0, R, chk)
@@ -255,7 +257,7 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 def inflate_norm_p_ez(x, I=1.5, cpu=1, mem=4):
     row_maxs, row_sums_sqs = inflate_norm_p(x.indptr, x.indices, x.data, I=I, cpu=cpu, mem=mem)
     #chaos = row_maxs.max(0) - row_sums_sqs.sum(0)
-    chaos = np.nanmax(row_maxs, 0) - np.nanmax(row_sums_sqs, 0)
+    chaos = np.nanmax(row_maxs, 0) - np.nansum(row_sums_sqs, 0)
     return chaos.max()
 
 
@@ -1139,8 +1141,8 @@ def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     #chk = max(R // cpu, 1<<24)
 
-    #cpu = max(1, xc.size // (1<<24))
-    chk = R // cpu
+    cpu = max(1, xc.size // (1<<26))
+    chk = max(1, R // cpu)
 
 
     idxs = np.arange(0, R, chk)
@@ -1450,8 +1452,8 @@ def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    #cpu = max(1, xc.size // (1<<24))
-    chk = R // cpu
+    cpu = max(1, xc.size // (1<<26))
+    chk = max(1, R // cpu)
 
     idxs = np.arange(0, R, chk)
     block = idxs.size
@@ -1623,6 +1625,9 @@ def csrmm_ez_ms_slow_p(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=
     yr, yc, y = b.indptr, b.indices, b.data
 
     shape = (a.shape[0], b.shape[1])
+
+    cpu = max(1, min(cpu, yc.size//2**26))
+
 
     R = xr.shape[0]
     D = yr.shape[0]
@@ -4478,7 +4483,7 @@ def mat_split10(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, d
 
 
 
-def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, scale=True):
+def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, recover=1400, select=1100, scale=True):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -4522,7 +4527,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
             #s2n.remove(qid)
             del s2n[qid]
 
-        if lines % 100000 == 0:
+        if lines % 10000000 == 0:
             print 'dict_size', len(q2n), len(s2n)
             gc.collect()
 
@@ -4550,7 +4555,14 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
     #block0 = int(N / blk0) + 1
     #block1 = int(N / blk1) + 1
     #block = (block0 + block1) // 2
-    block = int(N//cpu) + 1
+
+    Edge = max(lines, N*max(recover, select))
+    cpu = max(Edge * 180 // 2**30 // mem, 2)
+
+    #block = int(N//cpu) + 1
+    block = N // cpu
+
+    print 'block is', block, N
 
     #print 'the new chunck size', N, cpu, mem, blk0, blk1, block
     shape = (N, N)
@@ -4622,7 +4634,8 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
                     a, b = key
                     if a == b:
                         continue
-                    _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+                    #_o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+                    _o = open(tmp_path + '/%d.npz' % b, 'ab')
                     _o.writelines(val)
                     _o.close()
                     pairs[key] = []
@@ -4636,7 +4649,8 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
             a, b = key
             if a == b:
                 continue
-            _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+            #_o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+            _o = open(tmp_path + '/%d.npz' % b, 'ab')
             _o.writelines(val)
             _o.close()
             pairs[key] = []
@@ -4659,7 +4673,8 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
     for key, val in pairs.iteritems():
         if len(val) > 0:
             a, b = key
-            _o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+            #_o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+            _o = open(tmp_path + '/%d.npz' % b, 'ab')
             _o.writelines(val)
             _o.close()
             pairs[key] = []
@@ -6617,8 +6632,8 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     R = indices.size
     #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
 
-    #cpu = max(1, indices.size // (1<<24))
-    chk = R // cpu
+    cpu = max(1, indices.size // (1<<26))
+    chk = max(1, R // cpu)
 
 
     idxs = np.arange(0, R, chk)
@@ -6690,6 +6705,12 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     Pcts = np.zeros((block, end), dtype=np.float32)
 
     visit = np.ones(end, dtype=np.int8)
+    inf_p = np.inf
+    inf_n = -inf_p
+    for i in xrange(end):
+        if lo[i] == inf_n or hi[i] == inf_p:
+            visit[i] = 0
+
     loop = np.any(visit)
     itr = 0
     while loop:
@@ -15807,12 +15828,13 @@ def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
 # csram_ez_ms
 def csr_add_disk(xy):
     fnx, fny = xy
-    if fnx.endswith('_merge.npy'):
+    if fnx.endswith('_Mg.npy'):
         prefix = fnx
-    elif fny.endswith('_merge.npy'):
+    elif fny.endswith('_Mg.npy'):
         prefix = fny
     else:
-        prefix = fnx + '_merge.npy'
+        prefix = fnx + '_Mg.npy'
+
     #if 1:
     #    return prefix
 
@@ -15824,10 +15846,10 @@ def csr_add_disk(xy):
     csr_close(y)
     csr_close(z)
 
-    if fnx.endswith('_merge.npy'):
+    if fnx.endswith('_Mg.npy'):
         os.system('rm %s'%fnx)
 
-    if fny.endswith('_merge.npy'):
+    if fny.endswith('_Mg.npy'):
         os.system('rm %s'%fny)
 
     os.system('mv %s_tmp.npy %s'%(prefix, prefix))
@@ -15841,8 +15863,6 @@ def merge_disk(qry, tmp_path=None, cpu=1):
 
     #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy')]
     fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy') and not elem.endswith('_merge.npy')]
-
-
 
     N = len(fns)
     while N > 1:
@@ -15872,12 +15892,18 @@ def merge_disk(qry, tmp_path=None, cpu=1):
         N = len(fns)
 
 
-    return fns[0]
+    #if fns:
+    #    return fns[0]
+    #else:
+    #    return None
+    #return fns
+    fnMgs = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+    return fnMgs
 
 
 
 def expand_t(xyz):
-    fnx, fns = xyz
+    fnx, fns, cpu = xyz
     x = load_npz_disk(fnx)
     z = None
     fntmp = fnx + '_tmp.npy'
@@ -15885,7 +15911,7 @@ def expand_t(xyz):
     #fnxzs.append([fnz, fnx])
     for fny in fns:
         y = load_npz_disk(fny)
-        tmp = csrmm_ez_ms_slow_p(y, x, prefix=fntmp, cpu=1, disk=True)
+        tmp = csrmm_ez_ms_slow_p(y, x, prefix=fntmp, cpu=cpu, disk=True)
         #print 'get tmp xy', tmp.nnz, fnz, fnx, fns
         if type(z) != type(None):
             ztmp = csram_ez_ms(z, tmp, prefix=fnz+'_tmp.npy', disk=True)
@@ -15919,49 +15945,27 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
 
     fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy') and not elem.endswith('_merge.npy')]
 
-    fnmerge = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_merge.npy')]
+    #fnmerge = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_merge.npy')]
+    fnmerge = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
 
-    #fnxzs = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fns]) for fnx in fns)
+    if not fnmerge:
+        fnmerge = fns
 
-    fnxzs = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge]) for fnx in fns)
-
-
-    #fnxzs = []
-    #for fnx in fns:
-    #    x = load_npz_disk(fnx)
-    #    z = None
-    #    fntmp = fnx + '_tmp.npy'
-    #    fnz = fnx + '_z.npy'
-    #    fnxzs.append([fnz, fnx])
-    #    for fny in fns:
-    #        y = load_npz_disk(fny)
-    #        tmp = csrmm_ez_ms_slow_p(y, x, prefix=fntmp, cpu=cpu, disk=True)
-    #        #print 'get tmp xy', tmp.nnz, fnz, fnx, fns
-    #        if type(z) != type(None):
-    #            ztmp = csram_ez_ms(z, tmp, prefix=fnz+'_tmp.npy', disk=True)
-    #            csr_close(ztmp)
-    #            #print 'before', os.listdir(tmp_path), fnz.split(os.sep)[-1]
-    #            os.system('rm %s ; mv %s_tmp.npy %s'%(fntmp, fnz, fnz))
-    #            #print 'after', os.listdir(tmp_path)
-    #        else:
-    #            csr_close(tmp)
-    #            os.system('mv %s %s'%(fntmp, fnz))
-
-    #       z = load_npz_disk(fnz)
-
-    #   print os.listdir(tmp_path)
-    #   # update x
-    #   csr_close(z)
-    #   del z
-    #   #os.system('mv %s %s'%(fnz, fnx))
-
+    #fnxzs = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, cpu]) for fnx in fns)
+    fnxzs = map(expand_t, [[fnx, fnmerge, cpu] for fnx in fns])
 
     # rename the new file
     for fnz, fnx in fnxzs:
-        #print 'before', os.listdir(tmp_path)
         os.system('mv %s %s'%(fnz, fnx))
+        #print 'before', os.listdir(tmp_path)
+        #if hasMg:
+        #    os.system('mv %s %s'%(fnz, fnx))
+        #else:
+        #    os.system('mv %s %s_Mg.npy ; mv %s %s'%(fnx, fnx, fnz, fnx))
         #print 'after', os.listdir(tmp_path)
 
+    #fnMg = fnx + '_Mg.npy'
+    #return fnmerge
 
 
 def regularize_t(xyz):
@@ -16014,34 +16018,6 @@ def regularize_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
     #print 'fns', fns, 'fnmg 1', fnmg
     fnxzs = Parallel(n_jobs=cpu)(delayed(regularize_t)([fnx, fnmg]) for fnx in fns)
     
-    #fnxzs = []
-    #for fnx in fns:
-    #    x = load_npz_disk(fnx)
-    #    z = None
-    #    fntmp = fnx + '_tmp.npy'
-    #    fnz = fnx + '_z.npy'
-    #    fnxzs.append([fnz, fnx])
-    #    for fny in fnmg:
-    #        y = load_npz_disk(fny)
-    #        tmp = csrmm_ez_ms_slow_p(x, y, prefix=fntmp, cpu=cpu, disk=True)
-    #
-    #        if type(z) != type(None):
-    #            ztmp = csram_ez_ms(z, tmp, prefix=fnz+'_tmp.npy', disk=True)
-    #            csr_close(ztmp)
-    #            #os.system('mv %s_tmp.npy %s'%(fnz, fnz))
-    #            os.system('rm %s ; mv %s_tmp.npy %s'%(fntmp, fnz, fnz))
-    #
-    #        else:
-    #            csr_close(tmp)
-    #            os.system('mv %s %s'%(fntmp, fnz))
-
-    #       z = load_npz_disk(fnz)
-
-    #    # update x
-    #    csr_close(z)
-    #    del z
-    #    #os.system('mv %s %s'%(fnz, fnx))
-
     # rename the new file
     for fnz, fnx in fnxzs:
         if first:
@@ -16052,9 +16028,9 @@ def regularize_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
 
 
 def inflate_norm_t(xyzs):
-    fn, I = xyzs
+    fn, I, cpu = xyzs
     x = load_npz_disk(fn)
-    chao = inflate_norm_p_ez(x, I=I, cpu=1)
+    chao = inflate_norm_p_ez(x, I=I, cpu=cpu)
     #chao_mx = max(chao_mx, chao)
     return chao
 
@@ -16073,7 +16049,10 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
     #    x = load_npz_disk(fn)
     #    chao = inflate_norm_p_ez(x, I, cpu=cpu)
     #    chao_mx = max(chao_mx, chao)
-    chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I]) for fn in fns)
+
+    #chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I]) for fn in fns)
+    chaos = map(inflate_norm_t, [[fn, I, cpu] for fn in fns])
+
     chao_mx = max(chaos)
 
     return chao_mx
@@ -16082,7 +16061,7 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
 def prune_t(xyzs):
     fn, prune, pct, R, S, cpu, inplace, mem = xyzs
     x = load_npz_disk(fn)
-    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=1, inplace=inplace, mem=mem)
+    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
 
 
 # prune on disk
@@ -16097,7 +16076,8 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
     #for fn in fns:
     #    x = load_npz_disk(fn)
     #    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
-    Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, cpu, inplace, mem]) for fn in fns)
+    #Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, cpu, inplace, mem]) for fn in fns)
+    map(prune_t, [[fn, prune, pct, R, S, cpu, inplace, mem] for fn in fns])
 
 
 
@@ -16226,7 +16206,6 @@ def xyz2csr_t(xyzs):
     #    if not i.endswith('.npz'):
     #        continue
 
-
     fn = tmp_path + '/' + i
         
     fq = np.memmap(fn, mode='r+', dtype='int32')
@@ -16257,8 +16236,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         os.system('mkdir -p %s' % tmp_path)
         os.system('rm -rf %s/*' % tmp_path)
 
-        q2n, block = mat_split(qry, tmp_path=tmp_path,
-                               chunk=chunk, cpu=cpu, sym=sym, mem=mem)
+        q2n, block = mat_split(qry, tmp_path=tmp_path, chunk=chunk, cpu=cpu, sym=sym, mem=mem, recover=recover, select=select)
 
         N = len(q2n)
 
@@ -16288,7 +16266,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     shape = (N, N)
     # convert xyz to csr
 
-
+    Edge = N * max(recover, select)
     #fns = []
     #for i in os.listdir(tmp_path):
     #    #print i
@@ -16326,28 +16304,42 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     #raise SystemExit()
 
     #norm(qry, shape, tmp_path, csr=False, cpu=cpu, prune=prune, diag=False)
+    #fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+
+    #if fnMgs:
+    #    fnMg = fnMgs[0]
+    #    for fn in fnMgs[1:]:
+    #        os.system('rm -rf %s'%fn)
+    #else:
+    #    fnMg = merge_disk(qry, tmp_path, cpu=cpu)
+    fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
+
+
+    #fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
+
+    #if alg == 'rmcl':
+    #    os.system('mv %s %s_Mg.npy'%(fnMg, fnMg))
+
     inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu)
     for it in xrange(itr):
 
         print 'iteration', it
 
-        print 'merge'
-        if it == 0 or alg == 'mcl':
-            fnmerge = merge_disk(qry, tmp_path, cpu=cpu)
-            #print 'merge', fnmerge
+        #print 'merge'
+        #if it == 0 or alg == 'mcl':
+        #    fnmerge = merge_disk(qry, tmp_path, cpu=cpu)
+        #    #print 'merge', fnmerge
 
         if alg == 'mcl':
             print 'expansion', cpu
-            expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
+            #expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
         else:
             print 'regularize', cpu
-            if it == 0:
-                os.system('mv %s %s_Mg.npy'%(fnmerge, fnmerge))
-            regularize_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
+            #if it == 0:
+            #    os.system('mv %s %s_Mg.npy'%(fnmerge, fnmerge))
+            #regularize_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
 
-        # remove merged matrix
-        os.system('rm -f %s'%fnmerge)
-
+        expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
 
         print 'inflate norm'
         chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu)
@@ -16359,6 +16351,13 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         #prune_disk(qry, tmp_path=tmp_path, cpu=cpu)
         print 'prune'
         prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1)
+
+
+        # remove merged matrix and merge matrix again
+        if alg == 'mcl':
+            for fnMg in fnMgs:
+                os.system('rm -f %s'%fnMg)
+            fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
 
 
     cs = get_connect_disk(qry, tmp_path=tmp_path)
