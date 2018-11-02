@@ -6658,6 +6658,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
 
         Le, Rt = starts[idx: idx+2]
         r = Le // chk
+        r = idx
 
         #Rt = min(R-1, Rt)
         for i in xrange(Le, Rt):
@@ -6706,11 +6707,11 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
 
     visit = np.ones(end, dtype=np.int8)
 
-    #inf_p = np.inf
-    #inf_n = -inf_p
-    #for i in xrange(end):
-    #    if lo[i] == inf_n or hi[i] == inf_p:
-    #        visit[i] = 0
+    inf_p = np.inf
+    inf_n = -inf_p
+    for i in xrange(end):
+        if lo[i] == inf_n or hi[i] == inf_p:
+            visit[i] = 0
 
     loop = np.any(visit)
     itr = 0
@@ -6737,6 +6738,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
         for idx in prange(block):
             Le, Rt = starts[idx: idx+2]
             r = Le // chk
+            r = idx
 
             for i in xrange(Le, Rt):
                 col = indices[i]
@@ -6795,6 +6797,8 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
 
             Le, Rt = starts[idx: idx+2]
             r = Le // chk
+            r = idx
+
             for i in xrange(Le, Rt):
                 col = indices[i]
                 val = data[i]
@@ -15865,6 +15869,13 @@ def merge_disk(qry, tmp_path=None, cpu=1):
     #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy')]
     fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy') and not elem.endswith('_merge.npy')]
 
+
+    fnMgs = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')] 
+
+    for fnMg in fnMgs:
+        os.system('rm %s'%fnMg)
+
+    print 'before merge', fns
     N = len(fns)
     while N > 1:
         #xyzs = [fns[elem: elem+2] for elem in xrange(0, N, 2)]
@@ -15899,11 +15910,20 @@ def merge_disk(qry, tmp_path=None, cpu=1):
     #    return None
     #return fns
     fnMgs = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+
+    for fnMg in fnMgs:
+        os.system('mv %s %s/all_Mg.npy'%(fnMg, tmp_path))
+
+    fnMgs = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+
+    print 'after merge', fnMgs
+
     return fnMgs
 
 
 
-def expand_t(xyz):
+def expand_t0(xyz):
+    #print 'expanding', xyz
     fnx, fns, cpu = xyz
     x = load_npz_disk(fnx)
     z = None
@@ -15933,6 +15953,43 @@ def expand_t(xyz):
     #os.system('mv %s %s'%(fnz, fnx))
 
     return [fnz, fnx]
+
+
+def expand_t(xyz):
+    #print 'expanding', xyz
+    fnx, fns, cpu = xyz
+    x = load_npz_disk(fnx)
+    #z = None
+    #fntmp = fnx + '_tmp.npy'
+    fnz = fnx + '_z.npy'
+    #fnxzs.append([fnz, fnx])
+    #for fny in fns:
+    #    y = load_npz_disk(fny)
+    #    tmp = csrmm_ez_ms_slow_p(y, x, prefix=fntmp, cpu=cpu, disk=True)
+    #    #print 'get tmp xy', tmp.nnz, fnz, fnx, fns
+    #    if type(z) != type(None):
+    #        ztmp = csram_ez_ms(z, tmp, prefix=fnz+'_tmp.npy', disk=True)
+    #        csr_close(ztmp)
+    #        #print 'before', os.listdir(tmp_path), fnz.split(os.sep)[-1]
+    #        os.system('rm %s ; mv %s_tmp.npy %s'%(fntmp, fnz, fnz))
+    #        #print 'after', os.listdir(tmp_path)
+    #    else:
+    #        csr_close(tmp)
+    #        os.system('mv %s %s'%(fntmp, fnz))
+    #    z = load_npz_disk(fnz)
+
+    #print os.listdir(tmp_path)
+    # update x
+
+    fny = fns[0]
+    y = load_npz_disk(fny)
+    z = csrmm_ez_ms_slow_p(y, x, prefix=fnz, cpu=cpu, disk=True)
+    csr_close(z)
+    del z
+    #os.system('mv %s %s'%(fnz, fnx))
+
+    return [fnz, fnx]
+
 
 
 
@@ -16342,13 +16399,13 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
 
         expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
 
-        print 'inflate norm'
+        print 'inflate and norm'
         chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu)
+        print 'chao', chao
         if chao < 1e-3 and it > 0:
             break
 
 
-        print 'chao', chao
         #prune_disk(qry, tmp_path=tmp_path, cpu=cpu)
         print 'prune'
         prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1)
