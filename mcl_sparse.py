@@ -15958,8 +15958,7 @@ def expand_t0(xyz):
 
 
 def expand_t(xyz):
-    #
-    print 'expanding', xyz
+    #print 'expanding', xyz
     fnx, fns, cpu = xyz
     x = load_npz_disk(fnx)
     #z = None
