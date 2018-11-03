@@ -186,8 +186,7 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
     #chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
 
     #cpu = max(1, xc.size // (1<<24))
-    cpu = max(1, xc.size // (1<<26))
-
+    #cpu = max(1, xc.size // (1<<26))
     chk = max(1, R // cpu)
 
 
@@ -1141,7 +1140,7 @@ def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     #chk = max(R // cpu, 1<<24)
 
-    cpu = max(1, xc.size // (1<<26))
+    #cpu = max(1, xc.size // (1<<26))
     chk = max(1, R // cpu)
 
 
@@ -1452,7 +1451,7 @@ def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    cpu = max(1, xc.size // (1<<26))
+    #cpu = max(1, xc.size // (1<<26))
     chk = max(1, R // cpu)
 
     idxs = np.arange(0, R, chk)
@@ -4532,7 +4531,6 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
             gc.collect()
 
 
-
     f.close()
     while s2n:
         sid = s2n.popitem()[0]
@@ -6628,12 +6626,12 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     prune = prune < 1 and prune or 1./prune
     Rec = R
 
-    print 'prune_p, R, S', prune, pct, R, S
+    #print 'prune_p, R, S', prune, pct, R, S
 
     R = indices.size
     #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
 
-    cpu = max(1, indices.size // (1<<26))
+    #cpu = max(1, indices.size // (1<<26))
     chk = max(1, R // cpu)
 
 
@@ -6814,7 +6812,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
 def prune_p_ez(x, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
     prune = prune < 1 and prune or 1./prune
 
-    print 'prune_p_ez, R, S', prune, pct, R, S
+    #print 'prune_p_ez, R, S', prune, pct, R, S
 
     mi, ct = prune_p(x.indptr, x.indices, x.data, prune, pct, R, S, cpu, inplace, mem=mem)
     return mi, ct
@@ -15879,7 +15877,7 @@ def merge_disk(qry, tmp_path=None, cpu=1):
     for fnMg in fnMgs:
         os.system('rm %s'%fnMg)
 
-    print 'before merge', fns
+    #print 'before merge', fns
     N = len(fns)
     while N > 1:
         #xyzs = [fns[elem: elem+2] for elem in xrange(0, N, 2)]
@@ -15920,7 +15918,7 @@ def merge_disk(qry, tmp_path=None, cpu=1):
 
     fnMgs = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
 
-    print 'after merge', fnMgs
+    #print 'after merge', fnMgs
 
     return fnMgs
 
@@ -15960,7 +15958,8 @@ def expand_t0(xyz):
 
 
 def expand_t(xyz):
-    #print 'expanding', xyz
+    #
+    print 'expanding', xyz
     fnx, fns, cpu = xyz
     x = load_npz_disk(fnx)
     #z = None
@@ -16124,7 +16123,7 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
 def prune_t(xyzs):
     fn, prune, pct, R, S, cpu, inplace, mem = xyzs
     x = load_npz_disk(fn)
-    print 'prune_t, R, S', prune, pct, R, S
+    #print 'prune_t, R, S', prune, pct, R, S
     mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
 
 
@@ -16141,7 +16140,7 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
     #    x = load_npz_disk(fn)
     #    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
     #Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, cpu, inplace, mem]) for fn in fns)
-    print 'prune_disk, R, S', prune, pct, R, S
+    #print 'prune_disk, R, S', prune, pct, R, S
     map(prune_t, [[fn, prune, pct, R, S, cpu, inplace, mem] for fn in fns])
 
 
@@ -16377,7 +16376,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     #        os.system('rm -rf %s'%fn)
     #else:
     #    fnMg = merge_disk(qry, tmp_path, cpu=cpu)
-    fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
+    #fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
 
 
     #fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
@@ -16391,8 +16390,8 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         print 'iteration', it
 
         #print 'merge'
-        #if it == 0 or alg == 'mcl':
-        #    fnmerge = merge_disk(qry, tmp_path, cpu=cpu)
+        if it == 0 or alg == 'mcl':
+            fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
         #    #print 'merge', fnmerge
 
         if alg == 'mcl':
@@ -16405,6 +16404,13 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
             #regularize_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
 
         expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
+
+        # remove Mg file
+        if alg == 'mcl':
+            for fnMg in fnMgs:
+                os.system('rm -f %s'%fnMg)
+            #fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
+
 
         print 'inflate and norm'
         chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu)
@@ -16419,11 +16425,6 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
 
 
         # remove merged matrix and merge matrix again
-        if alg == 'mcl':
-            for fnMg in fnMgs:
-                os.system('rm -f %s'%fnMg)
-            fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
-
 
     cs = get_connect_disk(qry, tmp_path=tmp_path)
     #print 'cs', cs[0], cs[1][:10]
