@@ -1627,7 +1627,7 @@ def csrmm_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
 
     shape = (a.shape[0], b.shape[1])
 
-    cpu = max(1, min(cpu, yc.size//2**26))
+    cpu = max(1, min(cpu, xc.size//2**26))
 
 
     R = xr.shape[0]
