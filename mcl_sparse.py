@@ -16530,7 +16530,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         #        b_tmp = tmp_path + '/' + tmp.split('_old')[0]
         #        os.system('mv %s %s' % (a_tmp, b_tmp))
 
-        os.system('rm %s/*_Mg.py %s/*tmp* %s/*_z.npy' % (tmp_path, tmp_path, tmp_path))
+        os.system('rm %s/*_Mg.npy %s/*tmp*.npy %s/*_z.npy' % (tmp_path, tmp_path, tmp_path))
 
         f.close()
 
