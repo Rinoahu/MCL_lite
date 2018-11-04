@@ -1134,7 +1134,7 @@ def csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y):
 
 # parallelization of 1pass
 @njit(fastmath=True, nogil=True, cache=True, parallel=True)
-def csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
+def csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     R = xr.size
     D = yr.size
@@ -1443,7 +1443,7 @@ def csrmm_ms_2pass1(xr, xc, x, yr, yc, y, zr, zc, z):
 
 
 @njit(fastmath=True, nogil=True, cache=True, parallel=True)
-def csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
+def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
     R = xr.size
     D = yr.size
@@ -1618,7 +1618,7 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
 
 
 
-def csrmm_ez_ms_slow_p(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
+def csrmm_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     np.nan_to_num(a.data, False)
     np.nan_to_num(b.data, False)
 
@@ -1633,7 +1633,7 @@ def csrmm_ez_ms_slow_p(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=
     R = xr.shape[0]
     D = yr.shape[0]
     #nnz = csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y)
-    zptr = csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=cpu)
+    zptr = csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=cpu)
     nnz = zptr[-1]
     #print '1st pass', nnz, zptr
 
@@ -1689,7 +1689,7 @@ def csrmm_ez_ms_slow_p(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=
 
     #print 'a nnz', a.nnz, 'b nnz', b.nnz
 
-    zptr, flag = csrmm_ms_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+    zptr, flag = csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
 
 
     if disk:
@@ -16193,7 +16193,8 @@ def expand_t(xyz):
 
     fny = fns[0]
     y = load_npz_disk(fny)
-    z = csrmm_ez_ms_slow_p(y, x, prefix=fnz, cpu=cpu, disk=True)
+    #z = csrmm_ez_ms_slow_p(y, x, prefix=fnz, cpu=cpu, disk=True)
+    z = csrmm_p_ez(y, x, prefix=fnz, cpu=cpu, disk=True)
     csr_close(z)
     del z
     #os.system('mv %s %s'%(fnz, fnx))
