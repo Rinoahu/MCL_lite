@@ -597,6 +597,8 @@ def csram_ez_ms(a, b, cpu=1, prefix=None, tmp_path=None, disk=False):
 
 
 
+
+
 @njit
 def resize(a, new_size):
     new = np.empty(new_size, a.dtype)
@@ -2420,6 +2422,210 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
         zmtx = sps.csr_matrix((a.shape[0], b.shape[1]), dtype=a.dtype)
 
     return zmtx
+
+
+
+
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
+
+    R = xr.size
+    D = yr.size
+    nnz = z.size
+
+    #print '2pass_cpu', cpu, z.size
+    #chk = max(R // cpu, 1<<24)
+    #chk = R // cpu
+
+    #cpu = max(1, xc.size // (1<<26))
+    chk = max(1, R // cpu)
+
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+    starts[-1] = R
+
+
+    visit = np.zeros((block, D), dtype=np.int8)
+    index = np.zeros((block, D), yr.dtype)
+    data = np.zeros((block, D), y.dtype)
+
+
+    ks = np.zeros(block, dtype=np.int64)
+    zptr = offset
+
+
+    for idx in prange(block):
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        r = idx
+        #print 'idx', Le, Rt
+        Rt = min(R-1, Rt)
+        for i in xrange(Le, Rt):
+
+            ks[r] = 0
+            # get ith row of a
+            ast, aed = xr[i], xr[i+1]
+            bst, bed = yr[i], yr[i+1]
+            for j in xrange(ast, aed):
+                col, val = xc[j], x[j]
+
+                if val != 0:
+                    pass
+                else:
+                    continue
+
+                data[r, col] += val
+                if visit[r, col] == 0:
+                    index[r, ks[r]] = col
+                    ks[r] += 1
+                    visit[col] = 1
+                else:
+                    continue
+
+            for j in xrange(bst, bed):
+                col, val = yc[j], y[j]
+
+                if val != 0:
+                    pass
+                else:
+                    continue
+
+                data[r, col] += val
+                if visit[r, col] == 0:
+                    index[r, ks[r]] = col
+                    ks[r] += 1
+                    visit[r, col] = 1
+                else:
+                    continue
+
+            for pt in xrange(ks[r]):
+                col = index[r, pt]
+                visit[r, col] = 0
+                val = data[r, col]
+                if val != 0:
+                    zc[zptr[r]], z[zptr[r]] = col, val
+                    zptr[r] += 1
+                    data[r, col] = 0
+
+            zr[i+1] = zptr[r]
+
+    for i in xrange(1, zr.size):
+        if zr[i] < zr[i-1]:
+            zr[i] = zr[i-1]
+
+
+    #print 'the zptr hello', zptr
+    flag = zptr
+    return zptr, flag
+
+
+
+
+
+def csram_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
+    np.nan_to_num(a.data, False)
+    np.nan_to_num(b.data, False)
+
+    xr, xc, x = a.indptr, a.indices, a.data
+    yr, yc, y = b.indptr, b.indices, b.data
+
+    shape = (a.shape[0], b.shape[1])
+
+    cpu = max(1, min(cpu, yc.size//2**26))
+
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    #nnz = csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y)
+    #zptr = csrmm_ms_1pass_p(xr, xc, x, yr, yc, y, cpu=cpu)
+    #nnz = zptr[-1]
+
+    zptr = xr + yr
+    nnz = zptr[-1]
+
+    #print '1st pass', nnz, zptr
+
+    if prefix == None:
+        tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
+    else:
+        tmpfn = prefix
+
+    if not tmpfn.endswith('.npy'):
+        tmpfn += '.npy'
+
+    #zr = np.zeros(R, xr.dtype)
+    if disk:
+        #zr = np.memmap(tmpfn + '_zr_ms.npy', mode='w+', shape=R,  dtype=xr.dtype)
+        #zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
+        #z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
+
+        ac = R
+        bc = nnz
+
+        Nc = 5 + ac * 2 + bc * 2
+        fp = np.memmap(tmpfn, mode='w+', shape=Nc, dtype='int32')
+        Rc, Cc = shape
+
+        fp[:3] = [Rc, Cc, ac]
+
+        Bc = np.asarray([bc], 'int64')
+        Bc.dtype = 'int32'
+        fp[3: 5] = Bc[:2]
+
+        start = 5
+        end = start + ac * 2
+        zr = fp[start: end]
+        zr.dtype = 'int64'
+
+        #print 'zr size', zr.size, ac
+
+        start = end
+        end = bc + start
+        zc = fp[start:end]
+
+        start = end
+        end = bc + start
+        z = fp[start:end]
+        z.dtype = 'float32'
+
+
+    else:
+        zr = np.zeros(R, xr.dtype)
+        zc = np.empty(nnz,  dtype=xc.dtype)
+        z = np.empty(nnz, dtype=x.dtype)
+
+    #print 'a nnz', a.nnz, 'b nnz', b.nnz
+
+    zptr, flag = csram_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+
+
+    if disk:
+        #zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+        #zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+        #save_npz_disk(zmtx, tmpfn + '.npy')
+        #del zmtx
+        #os.system('rm %s_z*_ms.npy'%tmpfn)
+        zmtx = load_npz_disk(tmpfn) 
+
+    else:
+        indptr = zr
+        indices = zc
+        data = z
+        zmtx = sparse.csr_matrix((data, indices, indptr), shape=shape, dtype=z.dtype)
+
+    gc.collect()
+
+    return zmtx
+
+
+
+
+
+
 
 
 # parallel matrix A * B
@@ -15893,9 +16099,8 @@ def merge_disk(qry, tmp_path=None, cpu=1):
 
         #print 'pairs', N, pairs, unpairs
         if pairs:
-            #pairs_new = Parallel(n_jobs=cpu)(delayed(csr_add_disk)(xyz for xyz in pairs))
-            fns = Parallel(n_jobs=cpu)(delayed(csr_add_disk)(elem) for elem in pairs)
-            #new_zs = Parallel(n_jobs=cpu)(delayed(badd)(elem) for elem in xys)
+            #fns = Parallel(n_jobs=cpu)(delayed(csr_add_disk)(elem) for elem in pairs)
+            fns =map(csr_add_disk, [elem for elem in pairs])
 
         #pairs_new.extend(unpairs)
 
