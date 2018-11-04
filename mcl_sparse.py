@@ -16041,7 +16041,9 @@ def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
 
 # csram_ez_ms
 def csr_add_disk(xy):
-    fnx, fny = xy
+    #fnx, fny = xy
+    fnx, fny, cpu = xy
+
     if fnx.endswith('_Mg.npy'):
         prefix = fnx
     elif fny.endswith('_Mg.npy'):
@@ -16054,7 +16056,7 @@ def csr_add_disk(xy):
 
     x = load_npz_disk(fnx)
     y = load_npz_disk(fny)
-    z = csram_ez_ms(x, y, prefix=prefix+'_tmp.npy', disk=True)
+    z = csram_p_ez(x, y, cpu=cpu, prefix=prefix+'_tmp.npy', disk=True)
 
     csr_close(x)
     csr_close(y)
@@ -16101,7 +16103,7 @@ def merge_disk(qry, tmp_path=None, cpu=1):
         #print 'pairs', N, pairs, unpairs
         if pairs:
             #fns = Parallel(n_jobs=cpu)(delayed(csr_add_disk)(elem) for elem in pairs)
-            fns =map(csr_add_disk, [elem for elem in pairs])
+            fns =map(csr_add_disk, [[elem[0], elem[1], cpu] for elem in pairs])
 
         #pairs_new.extend(unpairs)
 
