@@ -2456,7 +2456,7 @@ def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     ks = np.zeros(block, dtype=np.int64)
     zptr = offset
 
-
+    #print 'zptr', zptr
     for idx in prange(block):
         Le, Rt = starts[idx: idx+2]
         r = Le // chk
@@ -2481,9 +2481,10 @@ def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
                 if visit[r, col] == 0:
                     index[r, ks[r]] = col
                     ks[r] += 1
-                    visit[col] = 1
+                    visit[r, col] = 1
                 else:
                     continue
+
 
             for j in xrange(bst, bed):
                 col, val = yc[j], y[j]
