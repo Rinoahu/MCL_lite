@@ -16366,7 +16366,7 @@ def merge_disk(qry, tmp_path=None, cpu=1):
         #xyzs = [fns[elem: elem+2] for elem in xrange(0, N, 2)]
         pairs = []
         unpairs = []
-        print 'before', fns
+        print 'before', [elem.split('/')[-1] for elem in fns]
         while fns:
             a = fns.pop()
             try:
@@ -16383,7 +16383,8 @@ def merge_disk(qry, tmp_path=None, cpu=1):
         #pairs_new.extend(unpairs)
 
         fns.extend(unpairs)
-        print 'after', fns
+        print 'after', [elem.split('/')[-1] for elem in fns]
+
         #del unpairs
         #del pairs_new
         N = len(fns)
