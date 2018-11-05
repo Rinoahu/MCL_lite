@@ -2747,7 +2747,7 @@ def csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
                 val = data[r, col]
                 if val != 0:
                     #zc[zptr[r]], z[zptr[r]] = col, val
-
+                    y_col, y_col_val = col, val
                     i_c = ycols[r, 1000000]
                     if i_c < 1000000:
                         ycols[r, i_c] = y_col
