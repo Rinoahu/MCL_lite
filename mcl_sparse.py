@@ -2754,7 +2754,7 @@ def csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
                         yvals[r, i_c] = y_col_val
                         ycols[r, 1000000] += 1
                     else:
-                        print 'cpu', cpu, ycols.shape
+                        #print 'cpu', cpu, ycols.shape
                         zst = ycols[r, 1000001]
                         zed = zst + i_c
                         zc[zst:zed] = ycols[r, :i_c]
