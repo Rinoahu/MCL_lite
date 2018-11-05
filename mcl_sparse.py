@@ -1439,9 +1439,6 @@ def csrmm_ms_2pass1(xr, xc, x, yr, yc, y, zr, zc, z):
     return zptr, flag
 
 
-
-
-
 @njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
@@ -1549,6 +1546,144 @@ def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     return zptr, flag
 
 
+
+
+
+# batch write of csrmm_2pass
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+def csrmm_2pass_bp(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
+
+    R = xr.size
+    D = yr.size
+    nnz = z.size
+
+    #print '2pass_cpu', cpu, z.size
+    #chk = max(R // cpu, 1<<24)
+    #chk = R // cpu
+
+    #cpu = max(1, xc.size // (1<<26))
+    chk = max(1, R // cpu)
+
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+    starts[-1] = R
+
+
+    visit = np.zeros((block, D), dtype=np.int8)
+    index = np.zeros((block, D), yr.dtype)
+    data = np.zeros((block, D), y.dtype)
+
+
+    ks = np.zeros(block, dtype=np.int64)
+    zptr = offset
+ 
+    ycols = np.zeros((block, 1000002), yr.dtype)
+    ycols[:, 1000001] = starts[: block]
+    yvals = np.zeros((block, 1000002), y.dtype)
+
+
+    for idx in prange(block):
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        r = idx
+        #print 'idx', Le, Rt
+        Rt = min(R-1, Rt)
+        for i in xrange(Le, Rt):
+        #for i in xrange(Le,  Rt-1):
+
+            #print 'before', zptr[r]
+            zr[i+1] = zptr[r]
+
+            # get ith row of a
+            kst, ked = xr[i], xr[i+1]
+            if kst == ked:
+                zr[i+1] = zr[i]
+                continue
+
+            #i_sz = index.size
+            ks[r] = 0
+            #nz = 0
+            for k in xrange(kst, ked):
+                x_col, x_val = xc[k], x[k]
+
+                if x_val != 0:
+                    pass
+                else:
+                    continue
+
+                # get row of b
+                jst, jed = yr[x_col], yr[x_col+1]
+                if jst == jed:
+                    continue
+
+                #nz += jed - jst
+                for j in xrange(jst, jed):
+                    y_col, y_val = yc[j], y[j]
+
+                    if y_val != 0:
+                        pass
+                    else:
+                        continue
+
+                    data[r, y_col] += x_val * y_val
+                    if visit[r, y_col] == 0:
+                        index[r, ks[r]] = y_col
+                        ks[r] += 1
+                        visit[r, y_col] = 1
+                    else:
+                        continue
+    
+            for pt in xrange(ks[r]):
+                y_col = index[r, pt]
+                visit[r, y_col] = 0
+                y_col_val = data[r, y_col]
+                if y_col_val != 0:
+                    #zc[zptr[r]], z[zptr[r]] = y_col, y_col_val
+                    i_c = ycols[r, 1000000]
+                    if i_c < 1000000:
+                        ycols[r, i_c] = y_col
+                        yvals[r, i_c] = y_col_val
+                        ycols[r, 1000000] += 1
+                    else:
+                        zst = ycols[r, 1000001]
+                        zed = zst + i_c
+                        zc[zst:zed] = ycols[r, :i_c]
+                        z[zst: zed] = yvals[r, :i_c]
+
+                        ycols[r, 1000000] = 0
+                        ycols[r, 0] = y_col
+                        yvals[r, 0] = y_col_val
+                        ycols[r, 1000000] += 1
+                        ycols[r, 1000001] += i_c
+
+                    zptr[r] += 1
+                    data[r, y_col] = 0
+
+            zr[i+1] = zptr[r]
+            #print 'after', zptr[r], zc.size
+
+    for r in xrange(block):
+        i_c = ycols[r, 1000000]
+        if i_c > 0:
+            zst = ycols[r, 1000001]
+            zed = zst + i_c
+            zc[zst:zed] = ycols[r, :i_c]
+            z[zst: zed] = yvals[r, :i_c]
+
+
+    for i in xrange(1, zr.size):
+        if zr[i] < zr[i-1]:
+            zr[i] = zr[i-1]
+
+
+    #print 'the zptr hello', zptr
+    flag = zptr
+    return zptr, flag
+
+
 @njit(fastmath=True, nogil=True, cache=True)
 def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
 
@@ -1635,6 +1770,7 @@ def csrmm_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     D = yr.shape[0]
     #nnz = csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y)
     zptr = csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=cpu)
+
     nnz = zptr[-1]
     #print '1st pass', nnz, zptr
 
@@ -1689,8 +1825,8 @@ def csrmm_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
         z = np.empty(nnz, dtype=x.dtype)
 
     #print 'a nnz', a.nnz, 'b nnz', b.nnz
-
-    zptr, flag = csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+    #zptr, flag = csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+    zptr, flag = csrmm_2pass_bp(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
 
 
     if disk:

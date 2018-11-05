@@ -15,24 +15,30 @@ from time import time
 #print z.nnz
 
 #z0 = mcl_sparse.csrmm_ez_ms_slow_p(x, x)
+N, D =x.shape
 
-st = time()
-z1 = mcl_sparse.csrmm_ez_ms_slow_p(x, x, cpu=2)
+P = 1e5 / N / D
+for i in xrange(100):
+    y = mcl_sparse.sparse.random(N, D, P, format='csr')
+    st = time()
+    z1 = mcl_sparse.csrmm_p_ez(x, y, cpu=2)
 
-print time() - st, z1.nnz
+    print time() - st, z1.nnz
 
-print '#' * 89
+    print '#' * 89
 
-st = time()
-z2 = mcl_sparse.csrmm_ez_ms_slow_p(x, x, cpu=1)
+    st = time()
+    z2 = mcl_sparse.csrmm_p_ez(x, y, cpu=1)
 
-print time() - st, z2.nnz
+    print time() - st, z2.nnz
 
-#z2 = x * x
+    z3 = x * y
 
-#print z2.nnz
-#dif = z1 - z0
+    print z3.nnz
 
-#print dif.nnz
+    dif = z3 - z1
+
+    print 'diff nnz', dif.nnz
+    print 'dif max min', dif.max(), dif.min()
 
 
