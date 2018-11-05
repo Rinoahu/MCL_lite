@@ -16366,6 +16366,7 @@ def merge_disk(qry, tmp_path=None, cpu=1):
         #xyzs = [fns[elem: elem+2] for elem in xrange(0, N, 2)]
         pairs = []
         unpairs = []
+        print 'before', fns
         while fns:
             a = fns.pop()
             try:
@@ -16382,7 +16383,7 @@ def merge_disk(qry, tmp_path=None, cpu=1):
         #pairs_new.extend(unpairs)
 
         fns.extend(unpairs)
-        #print 'pairs_new', pairs_new
+        print 'after', fns
         #del unpairs
         #del pairs_new
         N = len(fns)
@@ -16395,6 +16396,7 @@ def merge_disk(qry, tmp_path=None, cpu=1):
     #return fns
     fnMgs = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
 
+    print 'finish merge', fnMgs
     for fnMg in fnMgs:
         os.system('mv %s %s/all_Mg.npy'%(fnMg, tmp_path))
 
@@ -16866,8 +16868,9 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     #if alg == 'rmcl':
     #    os.system('mv %s %s_Mg.npy'%(fnMg, fnMg))
 
-    chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu)
-    prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1)
+    if xyzs:
+        chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu)
+        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1)
 
     for it in xrange(itr):
 
