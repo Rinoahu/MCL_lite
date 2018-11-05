@@ -16497,8 +16497,8 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
     if not fnmerge:
         fnmerge = fns
 
-    fnxzs = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, 1]) for fnx in fns)
-    #fnxzs = map(expand_t, [[fnx, fnmerge, cpu] for fnx in fns])
+    #fnxzs = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, 1]) for fnx in fns)
+    fnxzs = map(expand_t, [[fnx, fnmerge, cpu] for fnx in fns])
 
     print 'fnxzs', fnxzs
     # rename the new file
