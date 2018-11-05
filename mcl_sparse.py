@@ -5033,10 +5033,13 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
     #block = (block0 + block1) // 2
 
     Edge = max(lines, N*max(recover, select))
-    cpu = max(Edge * 180 // 2**30 // mem, 2)
+    #cpu = max(Edge * 120 // 2**30 // mem, 2)
+
+    Ncpu = max(Edge * 120 * cpu // 2**30 // mem, 2)
+
 
     #block = int(N//cpu) + 1
-    block = int(N // cpu) + 1
+    block = int(N // Ncpu) + 1
 
     print 'block is', block, N
 
@@ -16373,8 +16376,8 @@ def merge_disk(qry, tmp_path=None, cpu=1):
 
         #print 'pairs', N, pairs, unpairs
         if pairs:
-            #fns = Parallel(n_jobs=cpu)(delayed(csr_add_disk)(elem) for elem in pairs)
-            fns =map(csr_add_disk, [[elem[0], elem[1], cpu] for elem in pairs])
+            fns = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], 1]) for elem in pairs)
+            #fns =map(csr_add_disk, [[elem[0], elem[1], cpu] for elem in pairs])
 
         #pairs_new.extend(unpairs)
 
@@ -16491,8 +16494,8 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
     if not fnmerge:
         fnmerge = fns
 
-    #fnxzs = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, cpu]) for fnx in fns)
-    fnxzs = map(expand_t, [[fnx, fnmerge, cpu] for fnx in fns])
+    fnxzs = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, 1]) for fnx in fns)
+    #fnxzs = map(expand_t, [[fnx, fnmerge, cpu] for fnx in fns])
 
     print 'fnxzs', fnxzs
     # rename the new file
@@ -16591,8 +16594,8 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
     #    chao = inflate_norm_p_ez(x, I, cpu=cpu)
     #    chao_mx = max(chao_mx, chao)
 
-    #chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I]) for fn in fns)
-    chaos = map(inflate_norm_t, [[fn, I, cpu] for fn in fns])
+    chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I, 1]) for fn in fns)
+    #chaos = map(inflate_norm_t, [[fn, I, cpu] for fn in fns])
 
     chao_mx = max(chaos)
 
@@ -16618,9 +16621,8 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
     #for fn in fns:
     #    x = load_npz_disk(fn)
     #    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
-    #Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, cpu, inplace, mem]) for fn in fns)
-    #print 'prune_disk, R, S', prune, pct, R, S
-    map(prune_t, [[fn, prune, pct, R, S, cpu, inplace, mem] for fn in fns])
+    Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, cpu, inplace, mem]) for fn in fns)
+    #map(prune_t, [[fn, prune, pct, R, S, cpu, inplace, mem] for fn in fns])
 
 
 
@@ -17040,10 +17042,6 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
             _o.writelines([out, '\n'])
     if outfile and type(outfile) == str:
         _o.close()
-
-
-
-
 
 
 
