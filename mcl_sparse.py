@@ -16314,6 +16314,45 @@ def xyz2csr_m_ez(x, shape=None, prefix='tmp.npy'):
 
 
 
+
+def batch_submit(fuc, tasks, evaluate, mem=4):
+    Nbit = mem * 2 ** 30
+    bit = 0
+    worker = []
+    fns = []
+    for elem in tasks:
+        #for em in elem:
+        #    x = load_npz_disk(em)
+        #    bit += x.nnz
+
+        #csr_close(x)
+        
+        bit += evaluate(elem)
+
+        workers.append(elem)
+        if bit > Nbit:
+            ncpu = min(len(workers), cpu)
+            thread = max(ncpu // cpu, 1)
+            fns_work = Parallel(n_jobs=ncpu)(delayed(fuc)([elem, thread]) for elem in workers)
+            fns.extend(fns_work)
+            workers = []
+            bit = 0
+
+    if bit > 0:
+        ncpu = min(len(workers), cpu)
+        thread = max(ncpu // cpu, 1)
+        fns_work = Parallel(n_jobs=ncpu)(delayed(fuc)([elem, thread]) for elem in workers)
+        fns.extend(fns_work)
+        workers = []
+        bit = 0
+
+
+    return fns
+
+
+
+
+
 # csram_ez_ms
 def csr_add_disk(xy):
     #fnx, fny = xy
@@ -16395,7 +16434,7 @@ def merge_disk(qry, tmp_path=None, cpu=1, mem=4):
                 if bit > Nbit:
                     ncpu = min(len(workers), cpu)
                     thread = max(ncpu // cpu, 1)
-                    fns_work = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], thread]) for elem in workers)
+                    fns_work = Parallel(n_jobs=ncpu)(delayed(csr_add_disk)([elem[0], elem[1], thread]) for elem in workers)
                     fns.extend(fns_work)
                     workers = []
                     bit = 0
@@ -16403,7 +16442,7 @@ def merge_disk(qry, tmp_path=None, cpu=1, mem=4):
             if bit > 0:
                 ncpu = min(len(workers), cpu)
                 thread = max(ncpu // cpu, 1)
-                fns_work = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], thread]) for elem in workers)
+                fns_work = Parallel(n_jobs=ncpu)(delayed(csr_add_disk)([elem[0], elem[1], thread]) for elem in workers)
                 fns.extend(fns_work)
                 workers = []
                 bit = 0
@@ -16540,7 +16579,7 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1, mem=4):
         if bit > Nbit:
             ncpu = min(len(workers), cpu)
             thread = max(ncpu // cpu, 1)
-            fnxzs_work = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, thread]) for fnx in workers)
+            fnxzs_work = Parallel(n_jobs=ncpu)(delayed(expand_t)([fnx, fnmerge, thread]) for fnx in workers)
             fnxzs.extend(fnxzs_work)
             workers = []
             bit = 0
@@ -16548,7 +16587,7 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1, mem=4):
     if bit > 0:
         ncpu = min(len(workers), cpu)
         thread = max(ncpu // cpu, 1)
-        fnxzs_work = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, thread]) for fnx in workers)
+        fnxzs_work = Parallel(n_jobs=ncpu)(delayed(expand_t)([fnx, fnmerge, thread]) for fnx in workers)
         fnxzs.extend(fnxzs_work)
         workers = []
         bit = 0
@@ -16667,7 +16706,7 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1, mem=4):
         if bit > Nbit:
             ncpu = min(len(workers), cpu)
             thread = max(ncpu // cpu, 1)
-            chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
+            chaos = Parallel(n_jobs=ncpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
             chao_mx = max(chaos, chao_mx)
             workers = []
             bit = 0
@@ -16676,7 +16715,7 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1, mem=4):
     if bit > 0:
         ncpu = min(len(workers), cpu)
         thread = max(ncpu // cpu, 1)
-        chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
+        chaos = Parallel(n_jobs=ncpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
         chao_mx = max(chaos, chao_mx)
         workers = []
         bit = 0
@@ -16718,20 +16757,18 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
         if bit > Nbit:
             ncpu = min(len(workers), cpu)
             thread = max(ncpu // cpu, 1)
-            Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, thread, inplace, mem]) for fn in workers)
+            Parallel(n_jobs=ncpu)(delayed(prune_t)([fn, prune, pct, R, S, thread, inplace, mem]) for fn in workers)
             workers = []
             bit = 0
 
     if bit > 0:
         ncpu = min(len(workers), cpu)
         thread = max(ncpu // cpu, 1)
-        Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, thread, inplace, mem]) for fn in workers)
+        Parallel(n_jobs=ncpu)(delayed(prune_t)([fn, prune, pct, R, S, thread, inplace, mem]) for fn in workers)
         workers = []
         bit = 0
   
         
-
-
 
 # get connect comp from graph
 @njit(fastmath=True, nogil=True, parallel=True, cache=True)
