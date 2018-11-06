@@ -16707,7 +16707,7 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1, mem=4):
             ncpu = min(len(workers), cpu)
             thread = max(ncpu // cpu, 1)
             chaos = Parallel(n_jobs=ncpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
-            chao_mx = max(chaos, chao_mx)
+            chao_mx = max(max(chaos), chao_mx)
             workers = []
             bit = 0
 
