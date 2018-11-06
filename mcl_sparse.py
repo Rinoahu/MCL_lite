@@ -178,7 +178,8 @@ class worker(Thread):
 
 
 # normalization of matrix
-@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+#@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+@njit(nogil=True, cache=True, parallel=True)
 def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 
     R = xr.size
@@ -1133,7 +1134,8 @@ def csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y):
 
 
 # parallelization of 1pass
-@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+#@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+@njit(nogil=True, cache=True, parallel=True)
 def csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     R = xr.size
@@ -1439,7 +1441,8 @@ def csrmm_ms_2pass1(xr, xc, x, yr, yc, y, zr, zc, z):
     return zptr, flag
 
 
-@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+#@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+@njit(nogil=True, cache=True, parallel=True)
 def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
     R = xr.size
@@ -2563,7 +2566,8 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
 
 
 
-@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+#@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+@njit(nogil=True, cache=True, parallel=True)
 def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
     R = xr.size
@@ -2661,7 +2665,8 @@ def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
 
 
-@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+#@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+@njit(nogil=True, cache=True, parallel=True)
 def csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
     R = xr.size
@@ -7103,7 +7108,8 @@ def topks_ez(x, k=10, cpu=1):
 
 
 
-@njit(fastmath=True, cache=True, parallel=True)
+#@njit(fastmath=True, cache=True, parallel=True)
+@njit(nogil=True, cache=True, parallel=True)
 def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
     prune = prune < 1 and prune or 1./prune
     Rec = R
