@@ -17011,8 +17011,8 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     #    os.system('mv %s %s_Mg.npy'%(fnMg, fnMg))
 
     if xyzs:
-        chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu)
-        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1)
+        chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
+        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
 
     for it in xrange(itr):
 
@@ -17020,7 +17020,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
 
         #print 'merge'
         if it == 0 or alg == 'mcl':
-            fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
+            fnMgs = merge_disk(qry, tmp_path, cpu=cpu, mem=mem)
         #    #print 'merge', fnmerge
 
         if alg == 'mcl':
@@ -17032,7 +17032,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
             #    os.system('mv %s %s_Mg.npy'%(fnmerge, fnmerge))
             #regularize_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
 
-        expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu)
+        expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu, mem=mem)
 
         # remove Mg file
         if alg == 'mcl':
@@ -17042,7 +17042,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
 
 
         print 'inflate and norm'
-        chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu)
+        chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu, mem=mem)
         print 'chao', chao
         if chao < 1e-3 and it > 0:
             break
@@ -17050,7 +17050,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
 
         #prune_disk(qry, tmp_path=tmp_path, cpu=cpu)
         print 'prune'
-        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1)
+        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
 
 
         # remove merged matrix and merge matrix again
