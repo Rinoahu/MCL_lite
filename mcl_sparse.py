@@ -1142,7 +1142,7 @@ def csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     #chk = max(R // cpu, 1<<24)
 
-    #cpu = max(1, xc.size // (1<<26))
+    cpu = max(1, xc.size // (1<<26))
     chk = max(1, R // cpu)
 
 
@@ -1450,7 +1450,7 @@ def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    #cpu = max(1, xc.size // (1<<26))
+    cpu = max(1, xc.size // (1<<26))
     chk = max(1, R // cpu)
 
     idxs = np.arange(0, R, chk)
@@ -1561,7 +1561,7 @@ def csrmm_2pass_bp(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    #cpu = max(1, xc.size // (1<<26))
+    cpu = max(1, xc.size // (1<<26))
     chk = max(1, R // cpu)
 
     idxs = np.arange(0, R, chk)
@@ -2574,7 +2574,7 @@ def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    #cpu = max(1, xc.size // (1<<26))
+    cpu = max(1, xc.size // (1<<26))
     chk = max(1, R // cpu)
 
     idxs = np.arange(0, R, chk)
@@ -2672,7 +2672,7 @@ def csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    #cpu = max(1, xc.size // (1<<26))
+    cpu = max(1, xc.size // (1<<26))
     chk = max(1, R // cpu)
 
     idxs = np.arange(0, R, chk)
@@ -7113,7 +7113,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     R = indices.size
     #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
 
-    #cpu = max(1, indices.size // (1<<26))
+    cpu = max(1, indices.size // (1<<26))
     chk = max(1, R // cpu)
 
 
@@ -16694,7 +16694,7 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1, mem=4):
     #chaos = map(inflate_norm_t, [[fn, I, cpu] for fn in fns])
     #chao_mx = max(chaos)
 
-    chao_mx = -np.inf
+    chao_mx = -1
     Nbit = mem * 2 ** 30 / 8
     workers = []
     bit = 0
@@ -16716,7 +16716,7 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1, mem=4):
         ncpu = min(len(workers), cpu)
         thread = max(ncpu // cpu, 1)
         chaos = Parallel(n_jobs=ncpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
-        chao_mx = max(chaos, chao_mx)
+        chao_mx = max(max(chaos), chao_mx)
         workers = []
         bit = 0
 
