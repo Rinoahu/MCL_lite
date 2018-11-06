@@ -17020,6 +17020,8 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
         prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
 
+    #return load_npz_disk('0.npz.npy')
+
     for it in xrange(itr):
 
         print 'iteration', it
@@ -18100,7 +18102,7 @@ if __name__ == '__main__':
         #mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
         #mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
         #    sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
-        mcl_disk(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
+        x = mcl_disk(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
             sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
 
     else:
