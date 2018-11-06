@@ -7300,12 +7300,12 @@ def prune_p_ez(x, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4, 
     prune = prune < 1 and prune or 1./prune
 
     #print 'prune_p_ez, R, S', prune, pct, R, S
-    if fast == False:
-        mi, ct = prune_p(x.indptr, x.indices, x.data, prune, pct, R, S, cpu, inplace, mem=mem)
-        return mi, ct
-    else:
+    if fast:
         x.data[x.data < prune] = 0
         return None, None
+    else:
+        mi, ct = prune_p(x.indptr, x.indices, x.data, prune, pct, R, S, cpu, inplace, mem=mem)
+        return mi, ct
 
 
 
