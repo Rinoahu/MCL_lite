@@ -1825,8 +1825,8 @@ def csrmm_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
         z = np.empty(nnz, dtype=x.dtype)
 
     #print 'a nnz', a.nnz, 'b nnz', b.nnz
-    #zptr, flag = csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
-    zptr, flag = csrmm_2pass_bp(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+    zptr, flag = csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+    #zptr, flag = csrmm_2pass_bp(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
 
 
     if disk:
@@ -2871,8 +2871,8 @@ def csram_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
 
     #print 'a nnz', a.nnz, 'b nnz', b.nnz
 
-    #zptr, flag = csram_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
-    zptr, flag = csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+    zptr, flag = csram_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+    #zptr, flag = csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
 
 
     if disk:
