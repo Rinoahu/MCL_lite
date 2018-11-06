@@ -16572,34 +16572,32 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1, mem=4):
         fnmerge = fns
 
     #fnxzs = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, 1]) for fnx in fns)
-    #fnxzs = map(expand_t, [[fnx, fnmerge, cpu] for fnx in fns])
+    fnxzs = map(expand_t, [[fnx, fnmerge, cpu] for fnx in fns])
 
 
-    fnxzs = []
-    Nbit = mem * 2 ** 30 / 8
-    workers = []
-    bit = 0
-    for fn in fns:
-        x = load_npz_disk(fn)
-        bit += x.nnz
-        csr_close(x)
-        workers.append(fn)
-        if bit > Nbit:
-            ncpu = min(len(workers), cpu)
-            thread = max(ncpu // cpu, 1)
-            fnxzs_work = Parallel(n_jobs=ncpu)(delayed(expand_t)([fnx, fnmerge, thread]) for fnx in workers)
-            fnxzs.extend(fnxzs_work)
-            workers = []
-            bit = 0
-
-    if bit > 0:
-        ncpu = min(len(workers), cpu)
-        thread = max(ncpu // cpu, 1)
-        fnxzs_work = Parallel(n_jobs=ncpu)(delayed(expand_t)([fnx, fnmerge, thread]) for fnx in workers)
-        fnxzs.extend(fnxzs_work)
-        workers = []
-        bit = 0
-
+    #fnxzs = []
+    #Nbit = mem * 2 ** 30 / 8
+    #workers = []
+    #bit = 0
+    #for fn in fns:
+    #    x = load_npz_disk(fn)
+    #    bit += x.nnz
+    #    csr_close(x)
+    #    workers.append(fn)
+    #    if bit > Nbit:
+    #        ncpu = min(len(workers), cpu)
+    #        thread = max(ncpu // cpu, 1)
+    #        fnxzs_work = Parallel(n_jobs=ncpu)(delayed(expand_t)([fnx, fnmerge, thread]) for fnx in workers)
+    #        fnxzs.extend(fnxzs_work)
+    #        workers = []
+    #        bit = 0
+    #if bit > 0:
+    #    ncpu = min(len(workers), cpu)
+    #    thread = max(ncpu // cpu, 1)
+    #    fnxzs_work = Parallel(n_jobs=ncpu)(delayed(expand_t)([fnx, fnmerge, thread]) for fnx in workers)
+    #    fnxzs.extend(fnxzs_work)
+    #    workers = []
+    #    bit = 0
 
     print 'fnxzs', fnxzs
     # rename the new file
