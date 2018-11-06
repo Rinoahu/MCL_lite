@@ -16378,22 +16378,24 @@ def merge_disk(qry, tmp_path=None, cpu=1, mem=4):
 
         #print 'pairs', N, pairs, unpairs
         if pairs:
-            fns = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], 1]) for elem in pairs)
+            #fns = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], 1]) for elem in pairs)
             #fns =map(csr_add_disk, [[elem[0], elem[1], cpu] for elem in pairs])
 
             fns = []
             Nbit = mem * 2 ** 30 / 8
             workers = []
             bit = 0
-            for fn in pairs:
-                x = load_npz_disk(fn)
-                bit += x.nnz
+            for elem in pairs:
+                for em in elem:
+                    x = load_npz_disk(em)
+                    bit += x.nnz
+
                 csr_close(x)
-                workers.append(fn)
+                workers.append(elem)
                 if bit > Nbit:
                     ncpu = min(len(workers), cpu)
                     thread = max(ncpu // cpu, 1)
-                    fns_work = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], thread]) for elem in pairs)
+                    fns_work = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], thread]) for elem in workers)
                     fns.extend(fns_work)
                     workers = []
                     bit = 0
@@ -16401,7 +16403,7 @@ def merge_disk(qry, tmp_path=None, cpu=1, mem=4):
             if bit > 0:
                 ncpu = min(len(workers), cpu)
                 thread = max(ncpu // cpu, 1)
-                fns_work = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], thread]) for elem in pairs)
+                fns_work = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], thread]) for elem in workers)
                 fns.extend(fns_work)
                 workers = []
                 bit = 0
