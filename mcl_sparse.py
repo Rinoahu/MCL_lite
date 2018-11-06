@@ -178,8 +178,8 @@ class worker(Thread):
 
 
 # normalization of matrix
-#@njit(fastmath=True, nogil=True, cache=True, parallel=True)
-@njit(nogil=True, cache=True, parallel=True)
+#@njit(nogil=True, cache=True, parallel=True)
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 
     R = xr.size
@@ -1134,8 +1134,8 @@ def csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y):
 
 
 # parallelization of 1pass
-#@njit(fastmath=True, nogil=True, cache=True, parallel=True)
-@njit(nogil=True, cache=True, parallel=True)
+#@njit(nogil=True, cache=True, parallel=True)
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     R = xr.size
@@ -1441,8 +1441,8 @@ def csrmm_ms_2pass1(xr, xc, x, yr, yc, y, zr, zc, z):
     return zptr, flag
 
 
-#@njit(fastmath=True, nogil=True, cache=True, parallel=True)
-@njit(nogil=True, cache=True, parallel=True)
+#@njit(nogil=True, cache=True, parallel=True)
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
     R = xr.size
@@ -2566,8 +2566,8 @@ def csrmm_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None):
 
 
 
-#@njit(fastmath=True, nogil=True, cache=True, parallel=True)
-@njit(nogil=True, cache=True, parallel=True)
+#@njit(nogil=True, cache=True, parallel=True)
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
     R = xr.size
@@ -7107,9 +7107,8 @@ def topks_ez(x, k=10, cpu=1):
 
 
 
-
-#@njit(fastmath=True, cache=True, parallel=True)
-@njit(nogil=True, cache=True, parallel=True)
+#@njit(nogil=True, cache=True, parallel=True)
+@njit(fastmath=True, cache=True, parallel=True)
 def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
     prune = prune < 1 and prune or 1./prune
     Rec = R
@@ -7297,13 +7296,16 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
 
 
 # prune, select and recover
-def prune_p_ez(x, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
+def prune_p_ez(x, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4, fast=False):
     prune = prune < 1 and prune or 1./prune
 
     #print 'prune_p_ez, R, S', prune, pct, R, S
-
-    mi, ct = prune_p(x.indptr, x.indices, x.data, prune, pct, R, S, cpu, inplace, mem=mem)
-    return mi, ct
+    if fast == False:
+        mi, ct = prune_p(x.indptr, x.indices, x.data, prune, pct, R, S, cpu, inplace, mem=mem)
+        return mi, ct
+    else:
+        x.data[x.data < prune] = 0
+        return None, None
 
 
 
@@ -16923,6 +16925,9 @@ def xyz2csr_t(xyzs):
 
 # memmap based mcl, no memory limit
 def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, pct=.9, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5 * 10**7, outfile=None, sym=False, rsm=False, mem=4, alg='mcl'):
+
+    if alg != 'mcl':
+        cpu = max(cpu, 2)
 
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
