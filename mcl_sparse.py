@@ -5037,11 +5037,12 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
 
     Ncpu = max(Edge * 120 * cpu // 2**30 // mem, 2)
 
+    Ncpu = cpu
 
     #block = int(N//cpu) + 1
     block = int(N // Ncpu) + 1
 
-    print 'block is', block, N
+    print 'block is', block, N, Ncpu
 
     #print 'the new chunck size', N, cpu, mem, blk0, blk1, block
     shape = (N, N)
@@ -16347,7 +16348,7 @@ def csr_add_disk(xy):
 
 
 # merge all submatrices into single
-def merge_disk(qry, tmp_path=None, cpu=1):
+def merge_disk(qry, tmp_path=None, cpu=1, mem=4):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -16380,7 +16381,31 @@ def merge_disk(qry, tmp_path=None, cpu=1):
             fns = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], 1]) for elem in pairs)
             #fns =map(csr_add_disk, [[elem[0], elem[1], cpu] for elem in pairs])
 
-        #pairs_new.extend(unpairs)
+            fns = []
+            Nbit = mem * 2 ** 30 / 8
+            workers = []
+            bit = 0
+            for fn in pairs:
+                x = load_npz_disk(fn)
+                bit += x.nnz
+                csr_close(x)
+                workers.append(fn)
+                if bit > Nbit:
+                    ncpu = min(len(workers), cpu)
+                    thread = max(ncpu // cpu, 1)
+                    fns_work = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], thread]) for elem in pairs)
+                    fns.extend(fns_work)
+                    workers = []
+                    bit = 0
+
+            if bit > 0:
+                ncpu = min(len(workers), cpu)
+                thread = max(ncpu // cpu, 1)
+                fns_work = Parallel(n_jobs=cpu)(delayed(csr_add_disk)([elem[0], elem[1], thread]) for elem in pairs)
+                fns.extend(fns_work)
+                workers = []
+                bit = 0
+
 
         fns.extend(unpairs)
         print 'after', [elem.split('/')[-1] for elem in fns]
@@ -16481,7 +16506,7 @@ def expand_t(xyz):
 
 
 
-def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
+def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1, mem=4):
 
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
@@ -16498,7 +16523,34 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1):
         fnmerge = fns
 
     #fnxzs = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, 1]) for fnx in fns)
-    fnxzs = map(expand_t, [[fnx, fnmerge, cpu] for fnx in fns])
+    #fnxzs = map(expand_t, [[fnx, fnmerge, cpu] for fnx in fns])
+
+
+    fnxzs = []
+    Nbit = mem * 2 ** 30 / 8
+    workers = []
+    bit = 0
+    for fn in fns:
+        x = load_npz_disk(fn)
+        bit += x.nnz
+        csr_close(x)
+        workers.append(fn)
+        if bit > Nbit:
+            ncpu = min(len(workers), cpu)
+            thread = max(ncpu // cpu, 1)
+            fnxzs_work = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, thread]) for fnx in workers)
+            fnxzs.extend(fnxzs_work)
+            workers = []
+            bit = 0
+
+    if bit > 0:
+        ncpu = min(len(workers), cpu)
+        thread = max(ncpu // cpu, 1)
+        fnxzs_work = Parallel(n_jobs=cpu)(delayed(expand_t)([fnx, fnmerge, thread]) for fnx in workers)
+        fnxzs.extend(fnxzs_work)
+        workers = []
+        bit = 0
+
 
     print 'fnxzs', fnxzs
     # rename the new file
@@ -16582,7 +16634,7 @@ def inflate_norm_t(xyzs):
     return chao
 
 
-def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
+def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1, mem=4):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -16597,10 +16649,35 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1):
     #    chao = inflate_norm_p_ez(x, I, cpu=cpu)
     #    chao_mx = max(chao_mx, chao)
 
-    chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I, 1]) for fn in fns)
+    #chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I, 1]) for fn in fns)
     #chaos = map(inflate_norm_t, [[fn, I, cpu] for fn in fns])
+    #chao_mx = max(chaos)
 
-    chao_mx = max(chaos)
+    chao_mx = -np.inf
+    Nbit = mem * 2 ** 30 / 8
+    workers = []
+    bit = 0
+    for fn in fns:
+        x = load_npz_disk(fn)
+        bit += x.nnz
+        csr_close(x)
+        workers.append(fn)
+        if bit > Nbit:
+            ncpu = min(len(workers), cpu)
+            thread = max(ncpu // cpu, 1)
+            chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
+            chao_mx = max(chaos, chao_mx)
+            workers = []
+            bit = 0
+
+
+    if bit > 0:
+        ncpu = min(len(workers), cpu)
+        thread = max(ncpu // cpu, 1)
+        chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
+        chao_mx = max(chaos, chao_mx)
+        workers = []
+        bit = 0
 
     return chao_mx
 
@@ -16624,8 +16701,33 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
     #for fn in fns:
     #    x = load_npz_disk(fn)
     #    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
-    Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, cpu, inplace, mem]) for fn in fns)
-    #map(prune_t, [[fn, prune, pct, R, S, cpu, inplace, mem] for fn in fns])
+    #Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, 1, inplace, mem]) for fn in fns)
+    #map(prune_t, [[fn, prunese, pct, R, S, cpu, inplace, mem] for fn in fns])
+
+
+    Nbit = mem * 2 ** 30 / 8
+    workers = []
+    bit = 0
+    for fn in fns:
+        x = load_npz_disk(fn)
+        bit += x.nnz
+        csr_close(x)
+        workers.append(fn)
+        if bit > Nbit:
+            ncpu = min(len(workers), cpu)
+            thread = max(ncpu // cpu, 1)
+            Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, thread, inplace, mem]) for fn in workers)
+            workers = []
+            bit = 0
+
+    if bit > 0:
+        ncpu = min(len(workers), cpu)
+        thread = max(ncpu // cpu, 1)
+        Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, thread, inplace, mem]) for fn in workers)
+        workers = []
+        bit = 0
+  
+        
 
 
 
