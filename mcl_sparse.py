@@ -1144,8 +1144,8 @@ def csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     #chk = max(R // cpu, 1<<24)
 
-    cpu = max(1, xc.size // (1<<26))
-    chk = max(1, R // cpu)
+    #cpu = max(1, xc.size // (1<<26))
+    chk = max(1, R // cpu+1)
 
 
     idxs = np.arange(0, R, chk)
@@ -1186,7 +1186,7 @@ def csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
             for k in xrange(kst, ked):
                 x_col, x_val = xc[k], x[k]
 
-                if x_val != 0:
+                if x_val != 0 and x_col >= 0:
                     pass
                 else:
                     continue
@@ -1199,7 +1199,7 @@ def csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
                 for j in xrange(jst, jed):
                     y_col, y_val = yc[j], y[j]
 
-                    if y_val != 0:
+                    if y_val != 0 and y_col >= 0:
                         pass
                     else:
                         continue
@@ -1453,8 +1453,8 @@ def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    cpu = max(1, xc.size // (1<<26))
-    chk = max(1, R // cpu)
+    #cpu = max(1, xc.size // (1<<26))
+    chk = max(1, R // cpu+1)
 
     idxs = np.arange(0, R, chk)
     block = idxs.size
@@ -1497,7 +1497,7 @@ def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
             for k in xrange(kst, ked):
                 x_col, x_val = xc[k], x[k]
 
-                if x_val != 0:
+                if x_val != 0 and x_col >= 0:
                     pass
                 else:
                     continue
@@ -1511,7 +1511,7 @@ def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
                 for j in xrange(jst, jed):
                     y_col, y_val = yc[j], y[j]
 
-                    if y_val != 0:
+                    if y_val != 0 and y_col >= 0:
                         pass
                     else:
                         continue
@@ -1528,7 +1528,7 @@ def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
                 y_col = index[r, pt]
                 visit[r, y_col] = 0
                 y_col_val = data[r, y_col]
-                if y_col_val != 0:
+                if y_col_val != 0 and y_col >= 0:
                     zc[zptr[r]], z[zptr[r]] = y_col, y_col_val
                     #print 'fuck', y_col_val, zptr[r], y_col
                     #print 'fuck', zc[zptr[r]], z[zptr[r]] 
@@ -1757,8 +1757,9 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
 
 
 def csrmm_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
-    np.nan_to_num(a.data, False)
-    np.nan_to_num(b.data, False)
+    #np.nan_to_num(a.data, False)
+    #np.nan_to_num(b.data, False)
+    #print 'start'
 
     xr, xc, x = a.indptr, a.indices, a.data
     yr, yc, y = b.indptr, b.indices, b.data
@@ -1827,6 +1828,7 @@ def csrmm_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
         zc = np.empty(nnz,  dtype=xc.dtype)
         z = np.empty(nnz, dtype=x.dtype)
 
+    zc[:] = -1
     #print 'a nnz', a.nnz, 'b nnz', b.nnz
     zptr, flag = csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
     #zptr, flag = csrmm_2pass_bp(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
@@ -2578,8 +2580,8 @@ def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    cpu = max(1, xc.size // (1<<26))
-    chk = max(1, R // cpu)
+    #cpu = max(1, xc.size // (1<<26))
+    chk = max(1, R // cpu + 1)
 
     idxs = np.arange(0, R, chk)
     block = idxs.size
@@ -2595,7 +2597,17 @@ def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
 
     ks = np.zeros(block, dtype=np.int64)
-    zptr = offset
+    #zptr = offset
+    zptr = np.zeros(block, dtype=np.int64)
+    for idx in xrange(block):
+        Le, Rt = starts[idx: idx+2]
+        cst = offset[Le]
+        #print 'idx', Le, Rt, cst, offset[Rt]
+        zptr[idx] = cst
+
+    #print 'chk is', chk, offset[:10], R, cpu, 'block is', block
+    #print 'zptr', zptr[:10], R, cpu, chk
+
 
     #print 'zptr', zptr
     for idx in prange(block):
@@ -2613,7 +2625,7 @@ def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
             for j in xrange(ast, aed):
                 col, val = xc[j], x[j]
 
-                if val != 0:
+                if val != 0 and col >= 0:
                     pass
                 else:
                     continue
@@ -2630,7 +2642,7 @@ def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
             for j in xrange(bst, bed):
                 col, val = yc[j], y[j]
 
-                if val != 0:
+                if val != 0 and col >= 0:
                     pass
                 else:
                     continue
@@ -2649,17 +2661,21 @@ def csram_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
                 val = data[r, col]
                 if val != 0:
                     zc[zptr[r]], z[zptr[r]] = col, val
+                    #zc[zptr[i]], z[zptr[i]] = col, val
+
                     zptr[r] += 1
+                    #zptr[i] += 1
                     data[r, col] = 0
 
             zr[i+1] = zptr[r]
+            #zr[i+1] = zptr[i]
 
     for i in xrange(1, zr.size):
         if zr[i] < zr[i-1]:
             zr[i] = zr[i-1]
 
 
-    #print 'the zptr hello', zptr
+    #print 'the zptr hello', zptr[:10]
     flag = zptr
     return zptr, flag
 
@@ -2773,9 +2789,11 @@ def csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
 
                     zptr[r] += 1
+                    #zptr[i] += 1
                     data[r, col] = 0
 
             zr[i+1] = zptr[r]
+            #zr[i+1] = zptr[i]
 
 
     for r in xrange(block):
@@ -2810,8 +2828,8 @@ def csram_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
 
     shape = (a.shape[0], b.shape[1])
 
-    cpu = max(1, min(cpu, xc.size//2**26))
-    #cpu = max(1, cpu)
+    #cpu = max(1, min(cpu, xc.size//2**26))
+    cpu = max(1, cpu)
 
     R = xr.shape[0]
     D = yr.shape[0]
@@ -2821,6 +2839,7 @@ def csram_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
 
     zptr = xr + yr
     nnz = zptr[-1]
+    print 'z nnz', nnz
 
     #print '1st pass', nnz, zptr
 
@@ -2875,6 +2894,7 @@ def csram_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
         z = np.empty(nnz, dtype=x.dtype)
 
     #print 'a nnz', a.nnz, 'b nnz', b.nnz
+    zc[:] = -1
 
     zptr, flag = csram_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
     #zptr, flag = csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
@@ -7289,7 +7309,10 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
                 col = indices[i]
                 val = data[i]
                 thres = mi[col]
-                data[i] = val >= thres and val or 0
+                if val <= thres:
+                    #data[i] = val >= thres and val or 0
+                    data[i] = 0
+                    indices[i] = -1
 
     return mi, ct
 
