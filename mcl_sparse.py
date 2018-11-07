@@ -3064,7 +3064,7 @@ def csram_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     #zptr = xr + yr
     zptr = csram_1pass_p(xr, xc, x, yr, yc, y, cpu=cpu)
     nnz = zptr[-1]
-    print 'z nnz', nnz
+    #print 'z nnz', nnz
 
     #print '1st pass', nnz, zptr
 
@@ -7396,7 +7396,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
         for i in xrange(Le, Rt):
             col = indices[i]
             val = data[i]
-            if val <= 0:
+            if val == 0 or col < 0:
                 continue
 
             if Lo[r, col] > val:
@@ -7474,7 +7474,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
 
             for i in xrange(Le, Rt):
                 col = indices[i]
-                if visit[col] == 0:
+                if visit[col] == 0 or col < 0:
                     continue
 
                 val = data[i]
