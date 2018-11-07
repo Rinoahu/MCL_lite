@@ -186,7 +186,6 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 
     #chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
 
-    #cpu = max(1, xc.size // (1<<24))
     #cpu = max(1, xc.size // (1<<26))
     chk = max(1, R // cpu)
 
@@ -201,9 +200,11 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
     row_sums = np.zeros((block, R), dtype=np.float32)
     #print 'zptr', block, data.shape, starts
     #print 'Rp is', starts[-1], xr[starts[-1]]
+    End = 0
     for idx in prange(block):
         Le, Rt = starts[idx: idx+2]
         r = Le // chk
+        r = idx
         #print 'current_r', r, block
         #print 'L, R', Le, Rt, starts, chk, block, r
         #print 'L_R', xr[Le], xr[Rt-1]
@@ -222,14 +223,22 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
                 #x[k] = x_val
                 row_sums[r, x_col] += x_val
 
+                End = max(End, x_col)
+
+    End += 1
     row_sum = np.zeros(R, dtype=np.float32)
     for i in xrange(block):
-        for j in xrange(R):
+        #for j in xrange(R):
+        for j in xrange(End):
             row_sum[j] += row_sums[i, j]
 
 
-    row_sums_sqs = np.zeros((block, R), dtype=np.float32)
-    row_maxs = np.zeros((block, R), dtype=np.float32)
+    #row_sums_sqs = np.zeros((block, R), dtype=np.float32)
+    row_sums_sqs = np.zeros((block, End), dtype=np.float32)
+
+    #row_maxs = np.zeros((block, R), dtype=np.float32)
+    row_maxs = np.zeros((block, End), dtype=np.float32)
+
 
     # normalization and get the chaos
     for idx in prange(block):
@@ -246,7 +255,12 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
                 x_col, x_val = xc[k], x[k]
                 x_val = np.power(x_val, I)
                 rsum = row_sum[x_col]
-                x[k] = rsum != 0 and x_val / rsum or x_val
+                #x[k] = rsum != 0 and x_val / rsum or x_val
+                if rsum != 0:
+                    x[k] = x_val / rsum 
+                else:
+                    x[k] = 0
+
                 row_sums_sqs[r, x_col] += x[k] * x[k]
                 row_maxs[r, x_col] = max(row_maxs[r, x_col], x[k])
 
@@ -7364,7 +7378,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     R = indices.size
     #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
 
-    cpu = max(1, indices.size // (1<<26))
+    #cpu = max(1, indices.size // (1<<26))
     chk = max(1, R // cpu)
 
 
@@ -16946,34 +16960,33 @@ def inflate_norm_disk(qry, I=1.5, tmp_path=None, cpu=1, mem=4):
     #    chao_mx = max(chao_mx, chao)
 
     #chaos = Parallel(n_jobs=cpu)(delayed(inflate_norm_t)([fn, I, 1]) for fn in fns)
-    #chaos = map(inflate_norm_t, [[fn, I, cpu] for fn in fns])
-    #chao_mx = max(chaos)
+    chaos = map(inflate_norm_t, [[fn, I, cpu] for fn in fns])
+    chao_mx = max(chaos)
 
-    chao_mx = -1
-    Nbit = mem * 2 ** 30 / 8
-    workers = []
-    bit = 0
-    for fn in fns:
-        x = load_npz_disk(fn)
-        bit += x.nnz
-        csr_close(x)
-        workers.append(fn)
-        if bit > Nbit:
-            ncpu = min(len(workers), cpu)
-            thread = max(ncpu // cpu, 1)
-            chaos = Parallel(n_jobs=ncpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
-            chao_mx = max(max(chaos), chao_mx)
-            workers = []
-            bit = 0
+    #chao_mx = -1
+    #Nbit = mem * 2 ** 30 / 8
+    #workers = []
+    #bit = 0
+    #for fn in fns:
+    #    x = load_npz_disk(fn)
+    #    bit += x.nnz
+    #    csr_close(x)
+    #    workers.append(fn)
+    #    if bit > Nbit:
+    #        ncpu = min(len(workers), cpu)
+    #        thread = max(ncpu // cpu, 1)
+    #        chaos = Parallel(n_jobs=ncpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
+    #        chao_mx = max(max(chaos), chao_mx)
+    #        workers = []
+    #        bit = 0
 
-
-    if bit > 0:
-        ncpu = min(len(workers), cpu)
-        thread = max(ncpu // cpu, 1)
-        chaos = Parallel(n_jobs=ncpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
-        chao_mx = max(max(chaos), chao_mx)
-        workers = []
-        bit = 0
+    #if bit > 0:
+    #    ncpu = min(len(workers), cpu)
+    #    thread = max(ncpu // cpu, 1)
+    #    chaos = Parallel(n_jobs=ncpu)(delayed(inflate_norm_t)([fn, I, thread]) for fn in workers)
+    #    chao_mx = max(max(chaos), chao_mx)
+    #    workers = []
+    #    bit = 0
 
     return chao_mx
 
@@ -16998,30 +17011,30 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
     #    x = load_npz_disk(fn)
     #    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
     #Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, 1, inplace, mem]) for fn in fns)
-    #map(prune_t, [[fn, prunese, pct, R, S, cpu, inplace, mem] for fn in fns])
+    map(prune_t, [[fn, prunese, pct, R, S, cpu, inplace, mem] for fn in fns])
 
 
-    Nbit = mem * 2 ** 30 / 8
-    workers = []
-    bit = 0
-    for fn in fns:
-        x = load_npz_disk(fn)
-        bit += x.nnz
-        csr_close(x)
-        workers.append(fn)
-        if bit > Nbit:
-            ncpu = min(len(workers), cpu)
-            thread = max(ncpu // cpu, 1)
-            Parallel(n_jobs=ncpu)(delayed(prune_t)([fn, prune, pct, R, S, thread, inplace, mem]) for fn in workers)
-            workers = []
-            bit = 0
+    #Nbit = mem * 2 ** 30 / 8
+    #workers = []
+    #bit = 0
+    #for fn in fns:
+    #    x = load_npz_disk(fn)
+    #    bit += x.nnz
+    #    csr_close(x)
+    #    workers.append(fn)
+    #    if bit > Nbit:
+    #        ncpu = min(len(workers), cpu)
+    #        thread = max(ncpu // cpu, 1)
+    #        Parallel(n_jobs=ncpu)(delayed(prune_t)([fn, prune, pct, R, S, thread, inplace, mem]) for fn in workers)
+    #        workers = []
+    #        bit = 0
 
-    if bit > 0:
-        ncpu = min(len(workers), cpu)
-        thread = max(ncpu // cpu, 1)
-        Parallel(n_jobs=ncpu)(delayed(prune_t)([fn, prune, pct, R, S, thread, inplace, mem]) for fn in workers)
-        workers = []
-        bit = 0
+    #if bit > 0:
+    #    ncpu = min(len(workers), cpu)
+    #    thread = max(ncpu // cpu, 1)
+    #    Parallel(n_jobs=ncpu)(delayed(prune_t)([fn, prune, pct, R, S, thread, inplace, mem]) for fn in workers)
+    #    workers = []
+    #    bit = 0
   
         
 
