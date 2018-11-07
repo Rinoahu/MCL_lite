@@ -1158,7 +1158,7 @@ def csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     #chk = max(R // cpu, 1<<24)
 
-    #cpu = max(1, xc.size // (1<<26))
+    cpu = max(1, xc.size // (1<<24))
     chk = max(1, R // cpu+1)
 
 
@@ -1467,7 +1467,7 @@ def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    #cpu = max(1, xc.size // (1<<26))
+    cpu = max(1, xc.size // (1<<24))
     chk = max(1, R // cpu+1)
 
     idxs = np.arange(0, R, chk)
@@ -2591,7 +2591,7 @@ def csram_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    #cpu = max(1, xc.size // (1<<26))
+    cpu = max(1, xc.size // (1<<24))
     chk = max(1, R // cpu + 1)
 
     idxs = np.arange(0, R, chk)
@@ -2702,7 +2702,7 @@ def csram_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    #cpu = max(1, xc.size // (1<<26))
+    cpu = max(1, xc.size // (1<<24))
     chk = max(1, R // cpu + 1)
 
     idxs = np.arange(0, R, chk)
@@ -7378,7 +7378,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     R = indices.size
     #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
 
-    #cpu = max(1, indices.size // (1<<26))
+    cpu = max(1, indices.size // (1<<24))
     chk = max(1, R // cpu)
 
 
