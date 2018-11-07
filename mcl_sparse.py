@@ -17011,7 +17011,7 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
     #    x = load_npz_disk(fn)
     #    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
     #Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, 1, inplace, mem]) for fn in fns)
-    map(prune_t, [[fn, prunese, pct, R, S, cpu, inplace, mem] for fn in fns])
+    map(prune_t, [[fn, prune, pct, R, S, cpu, inplace, mem] for fn in fns])
 
 
     #Nbit = mem * 2 ** 30 / 8
