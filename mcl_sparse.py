@@ -2952,7 +2952,14 @@ def csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
 
     ks = np.zeros(block, dtype=np.int64)
-    zptr = offset
+    #zptr = offset
+    zptr = np.zeros(block, dtype=np.int64)
+    for idx in xrange(block):
+        Le, Rt = starts[idx: idx+2]
+        cst = offset[Le]
+        #print 'idx', Le, Rt, cst, offset[Rt]
+        zptr[idx] = cst
+
 
     #print 'zptr', zptr
     for idx in prange(block):

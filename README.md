@@ -3,7 +3,7 @@ MCL_lite is a memory-efficient implementation of Markov Clustering Algorithm for
 
 ## Requirement
 
-Make sure that you have the following installed
+Currently, MCL_lite only support 64-bit linux operation system. Make sure that you have the following installed:
 
 1. Python2.7 (Recommend [Anaconda](https://www.continuum.io/downloads#linux "https://www.continuum.io/downloads#linux" ))
     1. [numpy](http://www.numpy.org/ "http://www.numpy.org/")
