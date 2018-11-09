@@ -16706,7 +16706,7 @@ def merge_disk(qry, tmp_path=None, cpu=1, mem=4):
         #xyzs = [fns[elem: elem+2] for elem in xrange(0, N, 2)]
         pairs = []
         unpairs = []
-        print 'before', [elem.split('/')[-1] for elem in fns]
+        #print 'before', [elem.split('/')[-1] for elem in fns]
         while fns:
             a = fns.pop()
             try:
@@ -16749,7 +16749,7 @@ def merge_disk(qry, tmp_path=None, cpu=1, mem=4):
 
 
         fns.extend(unpairs)
-        print 'after', [elem.split('/')[-1] for elem in fns]
+        #print 'after', [elem.split('/')[-1] for elem in fns]
 
         #del unpairs
         #del pairs_new
@@ -16763,7 +16763,7 @@ def merge_disk(qry, tmp_path=None, cpu=1, mem=4):
     #return fns
     fnMgs = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
 
-    print 'finish merge', fnMgs
+    #print 'finish merge', fnMgs
     for fnMg in fnMgs:
         os.system('mv %s %s/all_Mg.npy'%(fnMg, tmp_path))
 
@@ -16891,7 +16891,7 @@ def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1, mem=4):
     #    workers = []
     #    bit = 0
 
-    print 'fnxzs', fnxzs
+    #print 'fnxzs', fnxzs
     # rename the new file
     for fnz, fnx in fnxzs:
         os.system('mv %s %s'%(fnz, fnx))
@@ -17318,8 +17318,9 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
 
 
+    chao_old = np.inf
     #return load_npz_disk('0.npz.npy')
-
+    nochange = 0
     for it in xrange(itr):
 
         print 'iteration', it
@@ -17347,11 +17348,26 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
             #fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
 
 
-        print 'inflate and norm'
+        print 'inflate'
+        print 'norm'
         chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu, mem=mem)
         print 'chao', chao
+
+
+        if abs(chao - chao_old) < 1e-4:
+            nochange += 1
+        else:
+            nochange = 0
+
+        chao_old = chao
+
+
         if chao < 1e-3 and it > 0:
             break
+        elif alg != 'mcl' and nochange >= 10:
+            break
+        else:
+            pass
 
 
         #prune_disk(qry, tmp_path=tmp_path, cpu=cpu)
