@@ -18304,7 +18304,7 @@ if __name__ == '__main__':
     argv = sys.argv
     # recommand parameter:
     args = {'-i': '', '-I': '1.5', '-a': '2', '-b': '20000000', '-o': None, '-d': 't', '-g': '0',
-            '-r': 'f', '-m': '4', '-p': '1/4e3', '-P': '0', '-S': '700', '-R': '800', '-A': 'mcl'}
+            '-r': 'f', '-m': '-1', '-p': '1/4e3', '-P': '0', '-S': '700', '-R': '800', '-A': 'mcl'}
 
     N = len(argv)
     for i in xrange(1, N):
@@ -18330,6 +18330,10 @@ if __name__ == '__main__':
         qry, ifl, cpu, bch, ofn, sym, gpu, rsm, mem, pru, slc, rcv, PRU = args['-i'], float(eval(args['-I'])), int(eval(args['-a'])), int(eval(args['-b'])), args['-o'], args['-d'], int(eval(args['-g'])), args['-r'], float(eval(args['-m'])), float(eval(args['-p'])), int(eval(args['-S'])), int(eval(args['-R'])), float(eval(args['-P']))
         alg = args['-A']
         pru = PRU >= 1 and 1. / PRU or pru
+
+        if mem <= 0:
+            mem = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 2 ** 30
+
         if sym.lower().startswith('f'):
             sym = False
         elif sym.lower().startswith('t'):
