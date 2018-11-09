@@ -5515,7 +5515,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
 
     Ncpu = max(Edge * 120 * cpu // 2**30 // mem, 2)
 
-    Ncpu = cpu
+    #Ncpu = cpu
 
     #block = int(N//cpu) + 1
     block = int(N // Ncpu) + 1
