@@ -17354,7 +17354,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         print 'chao', chao
 
 
-        if abs(chao - chao_old) < 1e-4:
+        if abs(chao - chao_old) < 1e-6:
             nochange += 1
         else:
             nochange = 0
