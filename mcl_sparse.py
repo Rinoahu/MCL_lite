@@ -7416,7 +7416,8 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     Hi[:, :] = -np.inf
 
 
-    ends = np.zeros(block, dtype=np.int64)
+    Ends = np.zeros(block, dtype=np.int64)
+    Starts = Ends.copy()
     for idx in prange(block):
 
         Le, Rt = starts[idx: idx+2]
@@ -7435,19 +7436,22 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
             if Hi[r, col] < val:
                 Hi[r, col] = val
 
-            ends[r] = max(ends[r], col)
+            Ends[r] = max(Ends[r], col)
+            Starts[r] = min(Starts[r], col)
 
-    end = ends.max() + 1
+    End = Ends.max() + 1
+    Start = max(Starts.min() - 1, 0)
     #print 'loops', end, starts
 
     #lo, hi = np.zeros(end, dtype=np.float32), np.zeros(end, dtype=np.float32)
-    lo = np.empty(end, dtype=np.float32)
+    lo = np.empty(End, dtype=np.float32)
     hi = lo.copy()
     lo[:] = np.inf
     hi[:] = -np.inf
 
     for i in xrange(block):
-        for j in xrange(end):
+        #for j in xrange(end):
+        for j in xrange(Start, End):
             low = Lo[i, j]
             if lo[j] > low:
                 lo[j] = low
@@ -7457,22 +7461,24 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
                 hi[j] = up
 
     #mi = lo.copy()
-    mi = np.empty(end, dtype=np.float32)
+    mi = np.empty(End, dtype=np.float32)
     mi[:] = prune
 
     # counts
-    ct = np.zeros(end, dtype=np.int32)
-    cts = np.zeros((block, end), dtype=np.int32)
+    ct = np.zeros(End, dtype=np.int32)
+    cts = np.zeros((block, End), dtype=np.int32)
 
     # percentage
-    Pct = np.zeros(end, dtype=np.float32)
-    Pcts = np.zeros((block, end), dtype=np.float32)
+    Pct = np.zeros(End, dtype=np.float32)
+    Pcts = np.zeros((block, End), dtype=np.float32)
 
-    visit = np.ones(end, dtype=np.int8)
+    visit = np.ones(End, dtype=np.int8)
 
     inf_p = np.inf
     inf_n = -inf_p
-    for i in xrange(end):
+    #for i in xrange(End):
+    for i in xrange(Start, End):
+
         if lo[i] == inf_n or hi[i] == inf_p:
             visit[i] = 0
 
@@ -7483,7 +7489,9 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
         #print 'iteration loop', itr, visit.sum()
 
         if itr > 0:
-            for i in xrange(end):
+            #for i in xrange(end):
+            for i in xrange(Start, End):
+
                 if visit[i] == 0:
                     continue
 
@@ -7521,14 +7529,18 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
 
 
         for j in xrange(block):
-            for i in xrange(end):
+            #for i in xrange(end):
+            for i in xrange(Start, End):
+
                 if visit[i] == 0:
                     continue
                 ct[i] += cts[j, i]
                 Pct[i] += Pcts[j, i]
 
 
-        for i in xrange(end):
+        #for i in xrange(end):
+        for i in xrange(Start, End):
+
             if visit[i] == 0:
                 continue
             Ni, Pi = ct[i], Pct[i]
