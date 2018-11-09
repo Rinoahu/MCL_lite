@@ -5513,7 +5513,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
 
     #cpu = max(Edge * 120 // 2**30 // mem, 2)
 
-    Ncpu = max(Edge * 120 * cpu // 2**30 // mem, 2)
+    Ncpu = max(Edge * 120 // 2**30 // mem, 2)
 
     #Ncpu = cpu
 
