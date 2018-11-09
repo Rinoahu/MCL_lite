@@ -5520,7 +5520,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
     #block = int(N//cpu) + 1
     block = int(N // Ncpu) + 1
 
-    print 'block is', block, N, Ncpu
+    print 'block is', block, N, Ncpu, Edge
 
     shape = (N, N)
 
