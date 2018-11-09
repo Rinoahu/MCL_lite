@@ -5456,11 +5456,12 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
     except:
         q2n = {}
 
-    if not q2n:
-        s2n = {}
 
-        lines = 0
-        min_score = 0
+    s2n = {}
+    lines = 0
+    min_score = 0
+
+    if not q2n:
         if mimetypes.guess_type(qry)[1] == 'gzip':
             f = gzip.open(qry, 'r')
         elif mimetypes.guess_type(qry)[1] == 'bzip2':
@@ -5504,12 +5505,12 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
             q2n[sid] = flag
             flag += 1
 
-        del s2n
 
     N = len(q2n)
     factor = 1
 
-    Edge = max(lines, N*max(recover, select))
+    Edge = max(lines, N * max(recover, select))
+
     #cpu = max(Edge * 120 // 2**30 // mem, 2)
 
     Ncpu = max(Edge * 120 * cpu // 2**30 // mem, 2)
