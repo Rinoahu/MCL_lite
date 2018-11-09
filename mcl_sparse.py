@@ -5669,7 +5669,7 @@ def save_npz_disk(csr, fn):
 
 
 # load my csr format on disk
-def load_npz_disk(fn):
+def load_npz_disk(fn, mmap=True):
     fp = np.memmap(fn, dtype='int32')
     shape = (fp[0], fp[1])
     a = fp[2]
@@ -5680,16 +5680,26 @@ def load_npz_disk(fn):
     start = 5
     end = start + a * 2
     indptr = fp[start: end]
+
+    if not mmap:
+        indptr = np.array(indptr)
+
     indptr.dtype = 'int64'
 
     start = end
     end = start + b
     indices = fp[start: end]
 
+    if not mmap:
+        indices = np.array(indices)
 
     start = end
     end = start + b
     data = fp[start: end]
+
+    if not mmap:
+        data = np.array(data)
+
     data.dtype = 'float32'
     csr = sparse.csr_matrix(shape)
     csr.data, csr.indices, csr.indptr = data, indices, indptr
