@@ -5231,8 +5231,7 @@ def mat_split10(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, d
 
 
 
-
-def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, recover=1400, select=1100, scale=True):
+def mat_split11(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, recover=1400, select=1100, scale=True):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -5357,6 +5356,202 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
         x, y = map(q2n.get, [qid, sid])
         out = pack('iif', *[x, y, z])
         #xi, yi = x // block, y // block
+        xi, yi = 0, y // block
+
+        try:
+            pairs[(xi, yi)].append(out)
+        except:
+            pairs[(xi, yi)] = [out]
+
+        if sym == False:
+            # sym
+            out = pack('iif', *[y, x, z])
+            try:
+                pairs[(yi, xi)].append(out)
+            except:
+                pairs[(yi, xi)] = [out]
+            flag += 1
+
+        if eye[x] < z:
+            eye[x] = z
+        if eye[y] < z:
+            eye[y] = z
+
+        flag += 1
+        # write batch to disk
+        if flag % 1000000 == 0:
+            for key, val in pairs.iteritems():
+                if len(val) > 0:
+                    a, b = key
+                    if a == b:
+                        continue
+                    #_o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+                    _o = open(tmp_path + '/%d.npz' % b, 'ab')
+                    _o.writelines(val)
+                    _o.close()
+                    pairs[key] = []
+                else:
+                    continue
+
+    f.close()
+
+    for key, val in pairs.iteritems():
+        if len(val) > 0:
+            a, b = key
+            if a == b:
+                continue
+            #_o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+            _o = open(tmp_path + '/%d.npz' % b, 'ab')
+            _o.writelines(val)
+            _o.close()
+            pairs[key] = []
+        else:
+            continue
+
+    # set diag or self-loop
+    for i in xrange(N):
+        # break
+        #z = eye[i] + 1
+        z = 0 < eye[i] and eye[i] or 1
+        #z = 1
+        out = pack('iif', *[i, i, z])
+        j = i // block
+        try:
+            pairs[(0, j)].append(out)
+        except:
+            pairs[(0, j)] = [out]
+
+    for key, val in pairs.iteritems():
+        if len(val) > 0:
+            a, b = key
+            #_o = open(tmp_path + '/%d_%d.npz' % (a, b), 'ab')
+            _o = open(tmp_path + '/%d.npz' % b, 'ab')
+            _o.writelines(val)
+            _o.close()
+            pairs[key] = []
+        else:
+            continue
+
+    # reorder the matrix
+    # print 'reorder the matrix'
+    #q2n = mat_reorder(qry, q2n, shape, False, tmp_path)
+
+    return q2n, block
+
+
+
+
+
+def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dtype='float32', mem=4, prune=4000, recover=1400, select=1100, scale=True):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    os.system('mkdir -p %s' % tmp_path)
+
+
+    try:
+        f = open(tmp_path + '_dict.pkl', 'rb')
+        q2n = cPickle.load(f)
+        f.close()
+    except:
+        q2n = {}
+
+    if not q2n:
+        s2n = {}
+
+        lines = 0
+        min_score = 0
+        if mimetypes.guess_type(qry)[1] == 'gzip':
+            f = gzip.open(qry, 'r')
+        elif mimetypes.guess_type(qry)[1] == 'bzip2':
+            f = bz2.BZ2File(qry, 'r')
+        else:
+            f = open(qry, 'r')
+
+        flag = 0
+        for i in f:
+            lines += 1
+            j = i[:-1].split('\t')
+            if len(j) == 3:
+                qid, sid, score = j[:3]
+            elif len(j) > 3:
+                qid, sid, score = j[1:4]
+            else:
+                continue
+
+            min_score = min(min_score, float(score))
+
+            if qid not in q2n:
+                q2n[qid] = flag
+                flag += 1
+
+            if sid not in q2n:
+                #s2n.add(sid)
+                s2n[sid] = None
+
+            if qid in s2n:
+                #s2n.remove(qid)
+                del s2n[qid]
+
+            if lines % 10000000 == 0:
+                print 'dict_size', len(q2n), len(s2n)
+                gc.collect()
+
+
+        f.close()
+        while s2n:
+            sid = s2n.popitem()[0]
+            q2n[sid] = flag
+            flag += 1
+
+        del s2n
+
+    N = len(q2n)
+    factor = 1
+
+    Edge = max(lines, N*max(recover, select))
+    #cpu = max(Edge * 120 // 2**30 // mem, 2)
+
+    Ncpu = max(Edge * 120 * cpu // 2**30 // mem, 2)
+
+    Ncpu = cpu
+
+    #block = int(N//cpu) + 1
+    block = int(N // Ncpu) + 1
+
+    print 'block is', block, N, Ncpu
+
+    shape = (N, N)
+
+    gc.collect()
+
+    eye = [0] * N
+    _os = {}
+
+    if mimetypes.guess_type(qry)[1] == 'gzip':
+        f = gzip.open(qry, 'r')
+    elif mimetypes.guess_type(qry)[1] == 'bzip2':
+        f = bz2.BZ2File(qry, 'r')
+    else:
+        f = open(qry, 'r')
+
+    pairs = {}
+    flag = 0
+    for i in f:
+        j = i[:-1].split('\t')
+        if len(j) == 3:
+            qid, sid, score = j[:3]
+        elif len(j) > 3:
+            qid, sid, score = j[1:4]
+        else:
+            continue
+
+        z = abs(float(score))
+        if scale:
+            z *= factor
+
+        x, y = map(q2n.get, [qid, sid])
+        out = pack('iif', *[x, y, z])
         xi, yi = 0, y // block
 
         try:
