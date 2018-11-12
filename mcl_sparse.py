@@ -8422,7 +8422,8 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
     R = indices.size
     #chk = mem > 0 and mem * (1<<30) / cpu or R // cpu
 
-    cpu = max(1, indices.size // (1<<24))
+    cache = 1 << 26
+    cpu = max(1, indices.size // cache)
     chk = max(1, R // cpu)
 
 
