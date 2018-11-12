@@ -18337,8 +18337,14 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     #    chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
     #    prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
 
-    chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
-    prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
+
+    #chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
+    #prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
+
+    fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+    if not fnMgs:
+        chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
+        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
 
 
     chao_old = np.inf
@@ -18350,7 +18356,13 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
 
         #print 'merge'
         if it == 0 or alg == 'mcl':
-            fnMgs = merge_disk(qry, tmp_path, cpu=cpu, mem=mem)
+
+            fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+            if not fnMgs:
+                fnMgs = merge_disk(qry, tmp_path, cpu=cpu, mem=mem)
+
+            #fnMgs = merge_disk(qry, tmp_path, cpu=cpu, mem=mem)
+
         #    #print 'merge', fnmerge
 
         if alg == 'mcl':
