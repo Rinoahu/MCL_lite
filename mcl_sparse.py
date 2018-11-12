@@ -6722,6 +6722,10 @@ def load_npz_disk(fn, mmap=True):
     data.dtype = 'float32'
     csr = sparse.csr_matrix(shape)
     csr.data, csr.indices, csr.indptr = data, indices, indptr
+
+    if not mmap:
+        fp._mmap.close()
+
     return csr
       
 
@@ -18200,7 +18204,7 @@ def get_connect_disk(qry, tmp_path):
         #print 'fn', fn
         try:
             #g0 = load_matrix(fn, csr=True)
-            g0 = load_npz_disk(fn)
+            g0 = load_npz_disk(fn, mmap=False)
             #print 'g0', g0.nnz
         except:
             g0 = None
@@ -18208,6 +18212,7 @@ def get_connect_disk(qry, tmp_path):
 
         try:
             g += g0
+            #csr_close(g0)
         except:
             g = g0
 
@@ -18221,7 +18226,6 @@ def get_connect_disk(qry, tmp_path):
                 cs = ci
             g = None
 
-        csr_close(g0)
 
     if type(g) != type(None):
         #ci = csgraph.connected_components(g)
