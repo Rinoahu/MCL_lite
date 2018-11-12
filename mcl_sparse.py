@@ -1970,7 +1970,7 @@ def csrmm_1pass_p_fast0(xr, xc, x, yr, yc, y, cpu=1, mem=4):
 
 @njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def csrmm_1pass_p_fast(xr, xc, x, yr, yc, y, cpu=1, mem=4):
-    Nbyte = 4 * (1<<30)
+    #Nbyte = 4 * (1<<30)
 
     R = xr.size
     D = yr.size
@@ -1978,7 +1978,8 @@ def csrmm_1pass_p_fast(xr, xc, x, yr, yc, y, cpu=1, mem=4):
     #print 'cpu_is', cpu
 
     #cpu = 1
-    Thread = max(1, xc.size // (1<<24))
+    cache = 1 << 26
+    Thread = max(1, xc.size // cache)
     #Thread = 64
     chk = max(1, R // Thread+1)
 
@@ -2213,7 +2214,8 @@ def csrmm_2pass_p_fast(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    Thread = max(1, xc.size // (1<<24))
+    cache = 1 << 26
+    Thread = max(1, xc.size // cache)
     #Thread = 64
     chk = max(1, R // Thread+1)
 
@@ -3252,8 +3254,9 @@ def csram_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
     R = xr.size
     D = yr.size
 
-    Thread = max(1, xc.size // (1<<24))
-    Thread = 64
+    cache = 1 << 26
+    Thread = max(1, xc.size // cache)
+    #Thread = 64
     chk = max(1, R // Thread + 1)
 
     idxs = np.arange(0, R, chk)
@@ -3507,8 +3510,9 @@ def csram_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    Thread = max(1, xc.size // (1<<24))
-    Thread = 64
+    cache = 1 << 26
+    Thread = max(1, xc.size // cache)
+    #Thread = 64
     chk = max(1, R // Thread + 1)
 
     idxs = np.arange(0, R, chk)
