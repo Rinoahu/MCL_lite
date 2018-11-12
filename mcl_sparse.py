@@ -17820,7 +17820,7 @@ def merge_disk(qry, tmp_path=None, cpu=1, mem=4):
 
 
 
-def expand_t(xyz):
+def expand_t0(xyz):
     fnx, fns, cpu = xyz
     x = load_npz_disk(fnx)
     z = None
@@ -17848,7 +17848,7 @@ def expand_t(xyz):
     return [fnz, fnx]
 
 
-def expand_t1(xyz):
+def expand_t(xyz):
     #print 'expanding', xyz
     fnx, fns, cpu = xyz
     x = load_npz_disk(fnx)
