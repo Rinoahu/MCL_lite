@@ -1979,7 +1979,7 @@ def csrmm_1pass_p_fast(xr, xc, x, yr, yc, y, cpu=1, mem=4):
 
     #cpu = 1
     Thread = max(1, xc.size // (1<<24))
-    Thread = 64
+    #Thread = 64
     chk = max(1, R // Thread+1)
 
     idxs = np.arange(0, R, chk)
