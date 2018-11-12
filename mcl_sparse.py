@@ -1769,6 +1769,106 @@ def csrmm_ms_2pass(xr, xc, x, yr, yc, y, zr, zc, z):
     return zptr, flag
 
 
+def csrmm_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
+    #np.nan_to_num(a.data, False)
+    #np.nan_to_num(b.data, False)
+    #print 'start'
+
+    xr, xc, x = a.indptr, a.indices, a.data
+    yr, yc, y = b.indptr, b.indices, b.data
+
+    shape = (a.shape[0], b.shape[1])
+
+    cpu = max(1, min(cpu, xc.size//2**26))
+    #cpu = max(1, cpu)
+
+
+    R = xr.shape[0]
+    D = yr.shape[0]
+    #nnz = csrmm_ms_1pass_fast(xr, xc, x, yr, yc, y)
+    zptr = csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=cpu)
+
+    nnz = zptr[-1]
+    #print '1st pass', nnz, zptr
+
+    if prefix == None:
+        tmpfn = tempfile.mktemp('tmp', dir=tmp_path)
+
+    else:
+        tmpfn = prefix
+
+    if not tmpfn.endswith('.npy'):
+        tmpfn += '.npy'
+
+    #zr = np.zeros(R, xr.dtype)
+    if disk:
+        #zr = np.memmap(tmpfn + '_zr_ms.npy', mode='w+', shape=R,  dtype=xr.dtype)
+        #zc = np.memmap(tmpfn + '_zc_ms.npy', mode='w+', shape=nnz,  dtype=xc.dtype)
+        #z = np.memmap(tmpfn + '_z_ms.npy', mode='w+', shape=nnz, dtype=x.dtype)
+
+        ac = R
+        bc = nnz
+
+        Nc = 5 + ac * 2 + bc * 2
+        fp = np.memmap(tmpfn, mode='w+', shape=Nc, dtype='int32')
+        Rc, Cc = shape
+
+        fp[:3] = [Rc, Cc, ac]
+
+        Bc = np.asarray([bc], 'int64')
+        Bc.dtype = 'int32'
+        fp[3: 5] = Bc[:2]
+
+        start = 5
+        end = start + ac * 2
+        zr = fp[start: end]
+        zr.dtype = 'int64'
+
+        #print 'zr size', zr.size, ac
+
+        start = end
+        end = bc + start
+        zc = fp[start:end]
+
+        start = end
+        end = bc + start
+        z = fp[start:end]
+        z.dtype = 'float32'
+
+
+    else:
+        zr = np.zeros(R, xr.dtype)
+        zc = np.empty(nnz,  dtype=xc.dtype)
+        z = np.empty(nnz, dtype=x.dtype)
+
+    zc[:] = -1
+    #print 'a nnz', a.nnz, 'b nnz', b.nnz
+    zptr, flag = csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+    #zptr, flag = csrmm_2pass_bp(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=cpu)
+
+
+    if disk:
+        #zmtx = sparse.csr_matrix(shape, dtype=z.dtype)
+        #zmtx.indptr, zmtx.indices, zmtx.data = zr, zc, z
+        #save_npz_disk(zmtx, tmpfn + '.npy')
+        #del zmtx
+        #os.system('rm %s_z*_ms.npy'%tmpfn)
+        zmtx = load_npz_disk(tmpfn) 
+
+    else:
+        indptr = zr
+        indices = zc
+        data = z
+        zmtx = sparse.csr_matrix((data, indices, indptr), shape=shape, dtype=z.dtype)
+
+    gc.collect()
+
+    return zmtx
+
+
+
+
+
 
 @njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def csrmm_1pass_p_fast(xr, xc, x, yr, yc, y, cpu=1, mem=4):
@@ -1795,8 +1895,8 @@ def csrmm_1pass_p_fast(xr, xc, x, yr, yc, y, cpu=1, mem=4):
     #print 'R is', R, idxs, xr[-1]
     #print '1pass_cpu', cpu, starts
 
-    zptr = np.zeros(block, dtype=np.int64)
-    ks = np.zeros(block, dtype=np.int64)
+    zptr = np.zeros(R+1, dtype=np.int64)
+    ks = np.zeros(R+1, dtype=np.int64)
 
     visit = np.zeros((block, D), dtype=np.int8)
     index = np.zeros((block, D), yr.dtype)
@@ -1818,7 +1918,8 @@ def csrmm_1pass_p_fast(xr, xc, x, yr, yc, y, cpu=1, mem=4):
             if kst == ked:
                 continue
 
-            ks[r] = 0
+            #ks[r] = 0
+            ks[i] = 0
             for k in xrange(kst, ked):
                 x_col, x_val = xc[k], x[k]
 
@@ -1842,29 +1943,37 @@ def csrmm_1pass_p_fast(xr, xc, x, yr, yc, y, cpu=1, mem=4):
 
                     data[r, y_col] += x_val * y_val
                     if visit[r, y_col] == 0:
-                        index[r, ks[r]] = y_col
-                        ks[r] += 1
+                        #index[r, ks[r]] = y_col
+                        index[r, ks[i]] = y_col
+
+                        #ks[r] += 1
+                        ks[i] += 1
                         visit[r, y_col] = 1
                     else:
                         continue
 
-            for pt in xrange(ks[r]):
+            #for pt in xrange(ks[r]):
+            for pt in xrange(ks[i]):
                 y_col = index[r, pt]
                 visit[r, y_col] = 0
                 if data[r, y_col] != 0:
                     data[r, y_col] = 0
-                    zptr[r] += 1
+                    #zptr[r] += 1
+                    zptr[i+1] += 1
 
 
-    zptr_new = np.zeros(block+1, dtype=np.int64)
-    for i in xrange(block):
-        zptr_new[i+1] = zptr[i] + zptr_new[i]
-
+    #zptr_new = np.zeros(block+1, dtype=np.int64)
+    #for i in xrange(block):
+    #    zptr_new[i+1] = zptr[i] + zptr_new[i]
+    
 
     #print 'zptr_1pass', zptr_new, zptr.sum()
 
     #return zptr
-    return zptr_new
+    #return zptr_new
+    for i in xrange(R):
+        zptr[i+1] += zptr[i]
+    return zptr
 
 
 
@@ -1896,7 +2005,8 @@ def csrmm_2pass_p_fast(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     data = np.zeros((block, D), y.dtype)
 
 
-    ks = np.zeros(block, dtype=np.int64)
+    #ks = np.zeros(block, dtype=np.int64)
+    ks = np.zeros(R+1, dtype=np.int64)
     zptr = offset
 
 
@@ -1910,7 +2020,8 @@ def csrmm_2pass_p_fast(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
         #for i in xrange(Le,  Rt-1):
 
             #print 'before', zptr[r]
-            zr[i+1] = zptr[r]
+            #zr[i+1] = zptr[r]
+            zr[i+1] = zptr[i+1]
 
             # get ith row of a
             kst, ked = xr[i], xr[i+1]
@@ -1945,22 +2056,26 @@ def csrmm_2pass_p_fast(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
                     data[r, y_col] += x_val * y_val
                     if visit[r, y_col] == 0:
-                        index[r, ks[r]] = y_col
-                        ks[r] += 1
+                        #index[r, ks[r]] = y_col
+                        index[r, ks[i]] = y_col
+                        #ks[r] += 1
+                        ks[i] += 1
                         visit[r, y_col] = 1
                     else:
                         continue
     
-            for pt in xrange(ks[r]):
+            #for pt in xrange(ks[r]):
+            for pt in xrange(ks[i]):
                 y_col = index[r, pt]
                 visit[r, y_col] = 0
                 y_col_val = data[r, y_col]
                 if y_col_val != 0 and y_col >= 0:
-                    zc[zptr[r]], z[zptr[r]] = y_col, y_col_val
-                    #print 'fuck', y_col_val, zptr[r], y_col
-                    #print 'fuck', zc[zptr[r]], z[zptr[r]] 
+                    #zc[zptr[r]], z[zptr[r]] = y_col, y_col_val
+                    zc[zptr[i]], z[zptr[i]] = y_col, y_col_val
 
-                    zptr[r] += 1
+                    #zptr[r] += 1
+                    zptr[i] += 1
+
                     data[r, y_col] = 0
 
 
@@ -1980,19 +2095,7 @@ def csrmm_2pass_p_fast(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-def csrmm_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
+def csrmm_p_ez_fast(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     #np.nan_to_num(a.data, False)
     #np.nan_to_num(b.data, False)
     #print 'start'
