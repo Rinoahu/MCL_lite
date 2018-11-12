@@ -1997,21 +1997,34 @@ def csrmm_1pass_p_fast(xr, xc, x, yr, yc, y, cpu=1, mem=4):
     zptr = np.zeros(R+1, dtype=np.int64)
     ks = np.zeros(R+1, dtype=np.int64)
 
-    visit = np.zeros((block, D), dtype=np.int8)
-    index = np.zeros((block, D), yr.dtype)
-    data = np.zeros((block, D), y.dtype)
+    #visit = np.zeros((block, D), dtype=np.int8)
+    visit = np.zeros((cpu, D), dtype=np.int8)
+
+    #index = np.zeros((block, D), yr.dtype)
+    index = np.zeros((cpu, D), yr.dtype)
+
+    #data = np.zeros((block, D), y.dtype)
+    data = np.zeros((cpu, D), y.dtype)
 
 
     for bst in xrange(0, blocks, cpu):
         bed = min(bst+cpu, blocks)
 
         #print 'bst', bst, bed
+        visit[:, :] = 0
+        index[:, :] = 0
+        data[:,:] = 0
+
+        #print 'bst_1pass', bst, bed
+
         #for idx in prange(block):
         for idx in prange(bst, bed):
 
             Le, Rt = starts[idx: idx+2]
             r = Le // chk
             r = idx
+            r = idx % cpu
+
             Rt = min(R-1, Rt)
             for i in xrange(Le, Rt):
                 # get ith row of a
@@ -2201,6 +2214,7 @@ def csrmm_2pass_p_fast(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = R // cpu
 
     Thread = max(1, xc.size // (1<<24))
+    #Thread = 64
     chk = max(1, R // Thread+1)
 
     idxs = np.arange(0, R, chk)
@@ -2211,11 +2225,14 @@ def csrmm_2pass_p_fast(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     starts[:block] = idxs
     starts[-1] = R
 
+    #visit = np.zeros((block, D), dtype=np.int8)
+    visit = np.zeros((cpu, D), dtype=np.int8)
 
-    visit = np.zeros((block, D), dtype=np.int8)
-    index = np.zeros((block, D), yr.dtype)
-    data = np.zeros((block, D), y.dtype)
+    #index = np.zeros((block, D), yr.dtype)
+    index = np.zeros((cpu, D), yr.dtype)
 
+    #data = np.zeros((block, D), y.dtype)
+    data = np.zeros((cpu, D), y.dtype)
 
     #ks = np.zeros(block, dtype=np.int64)
     ks = np.zeros(R+1, dtype=np.int64)
@@ -2226,11 +2243,18 @@ def csrmm_2pass_p_fast(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     for bst in xrange(0, blocks, cpu):
         bed = min(bst+cpu, blocks)
 
+        visit[:, :] = 0
+        index[:, :] = 0
+        data[:,:] = 0
+
+        #print 'bst_2pass', bst, bed
         #for idx in prange(block):
         for idx in prange(bst, bed):
             Le, Rt = starts[idx: idx+2]
             r = Le // chk
             r = idx
+            r = idx % cpu
+
             #print 'idx', Le, Rt
             Rt = min(R-1, Rt)
             for i in xrange(Le, Rt):
