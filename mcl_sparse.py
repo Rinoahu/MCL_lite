@@ -18388,13 +18388,13 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
 
         # remove Mg file
         if alg == 'mcl':
-            #fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
-            #print 'removing', fnMgs
+            fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+            print 'removing', fnMgs
             for fnMg in fnMgs:
                 os.system('rm -f %s/%s'%(tmp_path, fnMg))
 
-            #fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
-            #print 'after_removing', fnMgs
+            fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+            print 'after_removing', fnMgs
             #fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
 
 
