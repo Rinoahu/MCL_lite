@@ -16717,7 +16717,7 @@ def mcl10(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=14
         _o.close()
 
 
-def get_connect(fns):
+def get_connect0(fns):
     g = None
     #g = load_matrix(fns[0], shape, True)
     #cs = csgraph.connected_components(g)
@@ -18126,11 +18126,12 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
 
 # get connect comp from graph
 @njit(fastmath=True, nogil=True, parallel=True, cache=True)
-def get_connect(indptr, indices, data):
-    N = indptr.size - 1
+def get_connect0(indptr, indices, data):
+    N = indptr.size
+    #N = indptr.size 
     #M = indices.size
 
-    labels = -np.ones(N, dtype=np.int32)
+    labels = -np.ones(N-1, dtype=np.int32)
     #stack = -np.ones(M, dtype=np.int32)
     stack = -np.ones(N, dtype=np.int32)
 
@@ -18139,6 +18140,8 @@ def get_connect(indptr, indices, data):
         st, ed = indptr[i:i+2]
         if st == ed:
             continue
+
+        #labels[i] = label
         ptr = -1
         asigned = 0
         for j in xrange(st, ed):
@@ -18192,8 +18195,72 @@ def get_connect(indptr, indices, data):
 
     return label, labels
 
+
+
+@njit(fastmath=True, nogil=True, parallel=True, cache=True)
+def get_connect(indptr, indices, data):
+    N = indptr.size
+    nnz = indices.size
+    labels = -np.ones(N-1, dtype=np.int32)
+    stack = -np.ones(nnz, dtype=np.int32)
+
+    #label = 0
+    for i in xrange(N-1):
+        label = i
+        st, ed = indptr[i:i+2]
+        if st == ed:
+            continue
+
+        if labels[i] != -1:
+            continue
+
+        #ptr = -1
+        ptr = 0
+        stack[ptr] = i
+        for j in xrange(st, ed):
+            val = data[j]
+            col = indices[j]
+
+            if val == 0:
+                continue
+
+            ptr += 1
+            stack[ptr] = col
+
+        while ptr >= 0:
+            col = stack[ptr]
+            ptr -= 1
+
+            #if labels[col] == -1:
+            #    labels[col] = label
+            #else:
+            #    continue
+            labels[col] = label
+
+            st, ed = indptr[col: col+2]
+            for j in xrange(st, ed):
+                val_j = data[j]
+                col_j = indices[j]
+                #if val != 0 and labels[col_j] == -1: 
+                if val_j != 0 and labels[col_j] != label:
+                    ptr += 1
+                    stack[ptr] = col_j
+                    labels[col_j] = label
+                else:
+                    continue
+
+        #label += 1
+
+    return label, labels
+
+
+
+
 def get_connect_ez(x):
     return get_connect(x.indptr, x.indices, x.data)
+
+
+
 
 def get_connect_disk(qry, tmp_path):
     if tmp_path == None:
