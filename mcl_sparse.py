@@ -18203,55 +18203,52 @@ def get_connect(indptr, indices, data):
     nnz = indices.size
     labels = -np.ones(N-1, dtype=np.int32)
     stack = -np.ones(nnz, dtype=np.int32)
+    visit = np.zeros(nnz, dtype=np.int8)
+    sets = stack.copy()
 
-    #label = 0
+    cls = 0
     for i in xrange(N-1):
-        label = i
-        st, ed = indptr[i:i+2]
-        if st == ed:
-            continue
-
         if labels[i] != -1:
             continue
-
-        #ptr = -1
-        ptr = 0
+        ptr = ptr_s = 0
         stack[ptr] = i
-        for j in xrange(st, ed):
-            val = data[j]
-            col = indices[j]
-
-            if val == 0:
-                continue
-
-            ptr += 1
-            stack[ptr] = col
-
+        #print 'stack', stack
         while ptr >= 0:
             col = stack[ptr]
             ptr -= 1
 
-            #if labels[col] == -1:
-            #    labels[col] = label
-            #else:
-            #    continue
-            labels[col] = label
+            if visit[col] == 0:
+                sets[ptr_s] = col
+                ptr_s += 1
+                visit[col] = 1
 
+            # add neighbor to the stack
+            #print 'col', indptr[col:col+2], col
             st, ed = indptr[col: col+2]
             for j in xrange(st, ed):
                 val_j = data[j]
                 col_j = indices[j]
-                #if val != 0 and labels[col_j] == -1: 
-                if val_j != 0 and labels[col_j] != label:
+                if val_j != 0 and visit[col_j] == 0:
                     ptr += 1
                     stack[ptr] = col_j
-                    labels[col_j] = label
                 else:
                     continue
 
-        #label += 1
+        label = -1
+        for j in xrange(ptr_s):
+            k = sets[j]
+            if labels[k] != -1:
+                label = labels[k]
+                break
+        if label == -1:
+            label = cls
+            cls += 1
+        for j in xrange(ptr_s):
+            k = sets[j]
+            labels[k] = label
 
-    return label, labels
+
+    return cls, labels
 
 
 
