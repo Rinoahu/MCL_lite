@@ -187,6 +187,7 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
     #chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
 
     #cpu = max(1, xc.size // (1<<26))
+    cpu = max(1, cpu)
     chk = max(1, R // cpu)
 
 
