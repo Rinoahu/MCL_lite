@@ -267,12 +267,44 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 
     return row_maxs, row_sums_sqs
 
+
+
+# normalization of row
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+def inflate_norm_p0(xr, xc, x, I=1.5, cpu=1, mem=4):
+
+    R = xr.size
+
+    row_sums = np.zeros(R, dtype=np.float32)
+    row_sums_sqs = row_sums.copy() 
+    row_maxs = row_sums.copy()
+
+    for i in prange(R-1):
+        # get ith row of a
+        jst, jed = xr[i], xr[i+1]
+        if jst == jed:
+                continue
+        for j in xrange(jst, jed):
+            x[j] = np.power(x[j], I)
+            row_sums[i] += x[j]
+
+        for j in xrange(jst, jed):
+            x[j] /= row_sums[i]
+            row_sums_sqs[i] += x[j] * x[j]
+            row_maxs[i] = max(row_maxs[i], x[j])
+
+
+    return row_maxs, row_sums_sqs
+
+
+
+
 # inflation and normalization
 def inflate_norm_p_ez(x, I=1.5, cpu=1, mem=4):
     row_maxs, row_sums_sqs = inflate_norm_p(x.indptr, x.indices, x.data, I=I, cpu=cpu, mem=mem)
-    #chaos = row_maxs.max(0) - row_sums_sqs.sum(0)
     chaos = np.nanmax(row_maxs, 0) - np.nansum(row_sums_sqs, 0)
     return chaos.max()
+
 
 
 
@@ -5893,7 +5925,7 @@ def mat_split10(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, d
     os.system('mkdir -p %s' % tmp_path)
     q2n = {}
     lines = 0
-    min_score = 0
+    #min_score = 0
     if mimetypes.guess_type(qry)[1] == 'gzip':
         f = gzip.open(qry, 'r')
     elif mimetypes.guess_type(qry)[1] == 'bzip2':
@@ -5911,7 +5943,7 @@ def mat_split10(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, d
         else:
             continue
 
-        min_score = min(min_score, float(score))
+        #min_score = min(min_score, float(score))
 
         if qid not in q2n:
             q2n[qid] = None
@@ -6286,7 +6318,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
 
     s2n = {}
     lines = 0
-    min_score = 0
+    #min_score = 0
 
     if not q2n:
         if mimetypes.guess_type(qry)[1] == 'gzip':
@@ -6307,7 +6339,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
             else:
                 continue
 
-            min_score = min(min_score, float(score))
+            #min_score = min(min_score, float(score))
 
             if qid not in q2n:
                 q2n[qid] = flag
@@ -6340,7 +6372,7 @@ def mat_split(qry, step=4, chunk=5 * 10**7, tmp_path=None, cpu=4, sym=False, dty
 
     #cpu = max(Edge * 120 // 2**30 // mem, 2)
 
-    Ncpu = max(Edge * 120 // 2**30 // mem, 2)
+    Ncpu = max(Edge * 8*30 // 2**30 // mem, 2)
 
     #Ncpu = cpu
 
@@ -8413,7 +8445,7 @@ def topks_ez(x, k=10, cpu=1):
 
 #@njit(nogil=True, cache=True, parallel=True)
 @njit(fastmath=True, cache=True, parallel=True)
-def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
+def prune_p0(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
     prune = prune < 1 and prune or 1./prune
     Rec = R
 
@@ -8615,6 +8647,226 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
 
 
 
+
+
+@njit(fastmath=True, cache=True, parallel=True)
+def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4):
+    prune = prune < 1 and prune or 1./prune
+    Rec = R
+
+    R = indices.size
+
+    #cache = 1 << 26
+    #cpu = max(1, indices.size // cache)
+    cpu = max(1, cpu)
+    chk = max(1, R // cpu)
+
+
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+    starts[-1] = indptr[-1]
+    #starts[-1] = R
+    #print 'starts', starts
+
+    RL = indptr.size
+    #Lo, Hi = np.zeros((block, RL), dtype=np.float32), np.zeros((block, RL), dtype=np.float32)
+    Csum = np.zeros((block, RL), dtype=np.float32)
+    #Lo = np.zeros((block, RL), dtype=np.float32)
+    Lo = Csum.copy()
+    Hi = Lo.copy()
+
+    Lo[:, :] = np.inf
+    Hi[:, :] = -np.inf
+
+
+    Ends = np.zeros(block, dtype=np.int64)
+    Starts = Ends.copy()
+    for idx in prange(block):
+
+        Le, Rt = starts[idx: idx+2]
+        r = Le // chk
+        r = idx
+
+        #Rt = min(R-1, Rt)
+        for i in xrange(Le, Rt):
+            col = indices[i]
+            val = data[i]
+            if val == 0 or col < 0:
+                continue
+
+            if Lo[r, col] > val:
+                Lo[r, col] = val
+            if Hi[r, col] < val:
+                Hi[r, col] = val
+
+            Csum[r, col] += val
+
+            Ends[r] = max(Ends[r], col)
+            Starts[r] = min(Starts[r], col)
+
+    End = Ends.max() + 1
+    Start = max(Starts.min() - 1, 0)
+    #print 'loops', end, starts
+
+    #lo, hi = np.zeros(end, dtype=np.float32), np.zeros(end, dtype=np.float32)
+    csum = np.zeros(End, dtype=np.float32)
+    lo = np.empty(End, dtype=np.float32)
+    hi = lo.copy()
+    lo[:] = np.inf
+    hi[:] = -np.inf
+
+    for i in xrange(block):
+        #for j in xrange(end):
+        for j in xrange(Start, End):
+            low = Lo[i, j]
+            if lo[j] > low:
+                lo[j] = low
+
+            up = Hi[i, j]
+            if hi[j] < up:
+                hi[j] = up
+
+            csum[j] += Csum[i, j]
+
+    for i in xrange(Start, End):
+        if csum[i] <= 0:
+            csum[i] = 1
+
+    #mi = lo.copy()
+    mi = np.empty(End, dtype=np.float32)
+    mi[:] = prune
+
+    # counts
+    ct = np.zeros(End, dtype=np.int32)
+    cts = np.zeros((block, End), dtype=np.int32)
+
+    # percentage
+    Pct = np.zeros(End, dtype=np.float32)
+    Pcts = np.zeros((block, End), dtype=np.float32)
+
+    visit = np.ones(End, dtype=np.int8)
+
+    inf_p = np.inf
+    inf_n = -inf_p
+    #for i in xrange(End):
+    for i in xrange(Start, End):
+
+        if lo[i] == inf_n or hi[i] == inf_p:
+            visit[i] = 0
+
+    loop = np.any(visit)
+    itr = 0
+    while loop:
+
+        #print 'iteration loop', itr, visit.sum()
+
+        if itr > 0:
+            #for i in xrange(end):
+            for i in xrange(Start, End):
+
+                if visit[i] == 0:
+                    continue
+
+                mi[i] = (hi[i] + lo[i]) / 2.
+                if mi[i] == hi[i] or mi[i] == lo[i]:
+                    visit[i] = 0
+                if visit[i] != 0:
+                    ct[i] = 0
+                    cts[:, i] = 0
+                    Pct[i] = 0
+                    Pcts[:, i] = 0
+                else:
+                    continue
+
+        for idx in prange(block):
+            Le, Rt = starts[idx: idx+2]
+            r = Le // chk
+            r = idx
+
+            for i in xrange(Le, Rt):
+                col = indices[i]
+                if visit[col] == 0 or col < 0:
+                    continue
+
+                val = data[i]
+                mid = mi[col]
+
+
+                # get top k
+                if val > mid:
+                    cts[r, col] += 1
+                    Pcts[r, col] += val
+                    #if col == 0:
+                    #    print 'yes', i, val, mid,cts[r, col], Pcts[r, col]
+
+
+        for j in xrange(block):
+            #for i in xrange(end):
+            for i in xrange(Start, End):
+
+                if visit[i] == 0:
+                    continue
+                ct[i] += cts[j, i]
+                Pct[i] += Pcts[j, i]
+
+
+        #for i in xrange(end):
+        for i in xrange(Start, End):
+
+            if visit[i] == 0:
+                continue
+            Ni, Pi = ct[i], Pct[i] / csum[i]
+
+            #if i == 0:
+            #    print 'current_N_P', Ni, Pi, pct, Rec, S, mi[i], '#'
+
+            if Ni < Rec and Pi < pct:
+                #print 'recovery', hi[i], mi[i], lo[i], ct[i], itr 
+                hi[i] = mi[i]
+            elif Ni > S:
+                #print 'select', hi[i], mi[i], lo[i], ct[i], itr
+
+                if Ni < Rec and Pi < pct:
+                    hi[i] = min(mi[i], hi[i])
+                else:
+                    lo[i] = max(mi[i], lo[i])
+            else:
+                visit[i] = 0
+
+            if lo[i] >= hi[i]:
+                visit[i] = 0
+
+        loop = np.any(visit)
+        itr += 1
+
+    if inplace:
+        for idx in prange(block):
+
+            Le, Rt = starts[idx: idx+2]
+            r = Le // chk
+            r = idx
+
+            for i in xrange(Le, Rt):
+                col = indices[i]
+                val = data[i]
+                thres = mi[col]
+                if val <= thres:
+                    #data[i] = val >= thres and val or 0
+                    data[i] = 0
+                    indices[i] = -1
+
+    return mi, ct
+
+
+
+
+
+
+
+
 # prune, select and recover
 def prune_p_ez(x, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4, fast=False):
     prune = prune < 1 and prune or 1./prune
@@ -8622,7 +8874,7 @@ def prune_p_ez(x, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inplace=True, mem=4, 
     #print 'prune_p_ez, R, S', prune, pct, R, S
     if fast:
         x.data[x.data < prune] = 0
-        return None, None
+        return 0, 0
     else:
         mi, ct = prune_p(x.indptr, x.indices, x.data, prune, pct, R, S, cpu, inplace, mem=mem)
         return mi, ct
@@ -18571,6 +18823,10 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
             #fnMgs = merge_disk(qry, tmp_path, cpu=cpu)
 
 
+        print 'prune'
+        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
+
+
         print 'inflate'
         print 'norm'
         chao = inflate_norm_disk(qry, I=I, tmp_path=tmp_path, cpu=cpu, mem=mem)
@@ -18594,8 +18850,8 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
 
 
         #prune_disk(qry, tmp_path=tmp_path, cpu=cpu)
-        print 'prune'
-        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
+        #print 'prune'
+        #prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
 
 
         # remove merged matrix and merge matrix again
