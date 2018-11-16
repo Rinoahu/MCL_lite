@@ -18198,63 +18198,172 @@ def get_connect0(indptr, indices, data):
 
 
 @njit(fastmath=True, nogil=True, parallel=True, cache=True)
-def get_connect(indptr, indices, data):
+def get_connect1(indptr, indices, data):
     N = indptr.size
     nnz = indices.size
     labels = -np.ones(N-1, dtype=np.int32)
     stack = -np.ones(nnz, dtype=np.int32)
-    visit = np.zeros(nnz, dtype=np.int8)
-    sets = stack.copy()
+    #visit = np.zeros(nnz, dtype=np.int8)
+    #sets = stack.copy()
 
     cls = 0
     for i in xrange(N-1):
-        if labels[i] != -1:
-            continue
-        ptr = ptr_s = 0
+        ct = 0
+        ptr = 0
         stack[ptr] = i
-        #print 'stack', stack
         while ptr >= 0:
             col = stack[ptr]
             ptr -= 1
+            if labels[col] != -1:
+                continue
 
-            if visit[col] == 0:
-                sets[ptr_s] = col
-                ptr_s += 1
-                visit[col] = 1
-
+            ct += 1
+            #print 'ct', i, ct
+            labels[col] = cls
             # add neighbor to the stack
-            #print 'col', indptr[col:col+2], col
             st, ed = indptr[col: col+2]
             for j in xrange(st, ed):
                 val_j = data[j]
                 col_j = indices[j]
-                if val_j != 0 and visit[col_j] == 0:
+                if val_j != 0 and labels[col_j] == -1:
                     ptr += 1
                     stack[ptr] = col_j
-                else:
-                    continue
-
-        label = -1
-        for j in xrange(ptr_s):
-            k = sets[j]
-            if labels[k] != -1:
-                label = labels[k]
-                break
-        if label == -1:
-            label = cls
+        if ct > 0:
             cls += 1
-        for j in xrange(ptr_s):
-            k = sets[j]
-            labels[k] = label
-
 
     return cls, labels
 
 
 
+@njit(fastmath=True, nogil=True, parallel=True, cache=True)
+def get_connect(indptr, indices, data):
+    N = indptr.size
+    M = indices.size
+    labels = -np.ones(N-1, dtype=np.int32)
+    stack = -np.ones(M, dtype=np.int32)
+    #stack = np.arange(N-1)
+    #ptr = stack.size - 1
+    #visit = np.zeros(nnz, dtype=np.int8)
+    #sets = stack.copy()
+
+    label = 0
+    for i in xrange(N-1):
+        if labels[i] != -1:
+            continue
+
+        ptr = 0
+        stack[ptr] = i
+        while ptr >= 0:
+            col = stack[ptr]
+            ptr -= 1
+
+            if labels[col] == -1:
+                labels[col] = label
+            else:
+                continue
+
+            # add neighbor to the stack
+            st, ed = indptr[col: col+2]
+            for j in xrange(st, ed):
+                val_j = data[j]
+                col_j = indices[j]
+                if val_j != 0 and labels[col_j] == -1:
+                    ptr += 1
+                    stack[ptr] = col_j
+
+        label += 1
+
+    return label, labels
+
+
+
+
+# convert direct graph to undirect
+@njit(fastmath=True, nogil=True, parallel=True, cache=True)
+def dg2ug(indptr, indices, data):
+    N = indptr.size
+    rows = np.zeros(N, indptr.dtype)
+    for i in xrange(N-1):
+        jst, jed = indptr[i: i+2]
+        for j in xrange(jst, jed):
+            col = indices[j]
+            rows[col+1] += 1
+            rows[i+1] += 1
+
+    for i in xrange(1, N):
+        rows[i] += rows[i-1]
+
+    start = rows.copy()
+    M = rows[-1]
+
+    cols = np.empty(M, np.int32)
+    dats = np.empty(M, np.float32)
+    for i in xrange(N-1):
+        jst, jed = indptr[i: i+2]
+        row = i
+        for j in xrange(jst, jed):
+            col = indices[j]
+            dat = data[j]
+
+            k = start[row] 
+            cols[k] = col
+            dats[k] = dat
+            start[row] += 1
+
+            k = start[col] 
+            cols[k] = row
+            dats[k] = dat
+            start[col] += 1
+
+    return rows, cols, dats
+
+ 
+
+# convert direct graph to undirect
+@njit(fastmath=True, nogil=True, parallel=True, cache=True)
+def dg2ug0(indptr, indices, data):
+    N = indptr.size
+    rows = indptr.copy()
+    for i in xrange(N-1):
+        jst, jed = indptr[i: i+2]
+        for j in xrange(jst, jed):
+            col = indices[j]
+            rows[col+1] += 1
+
+    start = rows.copy()
+    M = rows[-1]
+    cols = np.empty(M, dtype=np.int32)
+    dats = np.zeros(M, dtype=np.float32)
+    for i in xrange(N-1):
+        st, ed = indptr[i: i+2]
+        row = i
+        for j in xrange(st, ed):
+            col = indices[j]
+            dat = data[j]
+
+            k = start[row] 
+            cols[k] = col
+            dats[k] = dat
+            start[row] += 1
+
+            k = start[col] 
+            cols[k] = col
+            dats[k] = dat
+            start[col] += 1
+
+    return rows, cols, dats
+    
+
 
 def get_connect_ez(x):
-    return get_connect(x.indptr, x.indices, x.data)
+
+    rows, cols, dats = dg2ug(x.indptr, x.indices, x.data)
+
+    print 'the new graph'
+    #return get_connect(x.indptr, x.indices, x.data)
+    return get_connect(rows, cols, dats)
+
+
 
 
 
