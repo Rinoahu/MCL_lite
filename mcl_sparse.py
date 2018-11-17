@@ -15943,6 +15943,40 @@ def merge_connected(c0, c1):
     return flag, a0_n
 
 
+
+@njit
+def cls2mat(N, C):
+    L = C.size
+    x = np.empty(L, np.int64)
+    y = C.argsort()
+    label = -1
+    yi = -1
+    #for i in y:
+    for i in xrange(L):
+        Ci = C[y[i]]
+        if Ci != label:
+            label = Ci
+            xi = y[i] 
+
+        x[i] = xi
+    z = np.ones(L, np.int32)
+    return x, y, z
+
+
+
+# convert cluster to adj matrix
+def cls2mat_ez(C, shape=None):
+    n, c = C
+    x, y, z = cls2mat(n, c)
+    if shape:
+        g = sparse.csr_matrix((z, (x, y)), shape)
+    else:
+        g = sparse.csr_matrix((z, (x, y)))
+
+    return g
+
+
+
 def mcl1(qry, tmp_path=None, xy=[], I=1.5, prune=1e-4, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5 * 10**7):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
@@ -18619,6 +18653,39 @@ def get_connect_ez(x):
 
 
 
+def get_connect_disk0(qry, tmp_path):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy') and not elem.endswith('_merge.npy')]
+
+
+    g = None
+    for fn in fns:
+        #print 'fn', fn
+        try:
+            g0 = load_npz_disk(fn)
+            #print 'g0', g0.nnz
+            c0 = get_connect_ez(g0)
+            g0 = cls2mat_ez(g0)
+        except:
+            g0 = None
+            continue
+
+        try:
+            g += g0
+            #csr_close(g0)
+        except:
+            g = g0
+
+    cs = None
+    if type(g) != type(None):
+        #ci = csgraph.connected_components(g)
+        cs = get_connect_ez(g)
+
+    return cs
+
 
 
 def get_connect_disk(qry, tmp_path):
@@ -18635,7 +18702,8 @@ def get_connect_disk(qry, tmp_path):
         #print 'fn', fn
         try:
             #g0 = load_matrix(fn, csr=True)
-            g0 = load_npz_disk(fn, mmap=False)
+            #g0 = load_npz_disk(fn, mmap=False)
+            g0 = load_npz_disk(fn)
             #print 'g0', g0.nnz
         except:
             g0 = None
