@@ -8857,13 +8857,9 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
                 if val <= thres:
                     #data[i] = val >= thres and val or 0
                     data[i] = 0
-                    indices[i] = -1
+                    #indices[i] = -1
 
     return mi, ct
-
-
-
-
 
 
 
@@ -18554,7 +18550,7 @@ def get_connect(indptr, indices, data):
             for j in xrange(st, ed):
                 val_j = data[j]
                 col_j = indices[j]
-                if val_j != 0 and labels[col_j] == -1:
+                if val_j != 0 and col_j >= 0 and labels[col_j] == -1:
                     ptr += 1
                     stack[ptr] = col_j
 
@@ -18698,6 +18694,7 @@ def get_connect_disk(qry, tmp_path):
 
     g = None
     cs = None
+
     for fn in fns:
         #print 'fn', fn
         try:
@@ -18707,6 +18704,9 @@ def get_connect_disk(qry, tmp_path):
             #print 'g0', g0.nnz
         except:
             g0 = None
+            continue
+
+        if g0.data.size == 0:
             continue
 
         try:
@@ -18725,7 +18725,6 @@ def get_connect_disk(qry, tmp_path):
                 cs = ci
             g = None
 
-
     if type(g) != type(None):
         #ci = csgraph.connected_components(g)
         ci = get_connect_ez(g)
@@ -18739,7 +18738,7 @@ def get_connect_disk(qry, tmp_path):
 
 
 # memmap based mcl, no memory limit
-def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, pct=.9, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5 * 10**7, outfile=None, sym=False, rsm=False, mem=4, alg='mcl'):
+def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, pct=.9, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4, alg='mcl'):
 
     if alg != 'mcl':
         cpu = max(cpu, 2)
