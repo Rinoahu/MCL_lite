@@ -3925,8 +3925,8 @@ def csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
 
 def csram_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
-    np.nan_to_num(a.data, False)
-    np.nan_to_num(b.data, False)
+    np.nan_to_num(a.data, copy=False)
+    np.nan_to_num(b.data, copy=False)
 
     xr, xc, x = a.indptr, a.indices, a.data
     yr, yc, y = b.indptr, b.indices, b.data
