@@ -18389,6 +18389,7 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
             x = load_npz_disk(fn)
             y = sparse.csr_matrix(x.shape)
             z = csram_p_ez(x, y, prefix=fn+'_elm.npy', tmp_path=tmp_path, disk=True, cpu=cpu)
+            #print os.listdir(tmp_path)
             os.system('mv %s_elm.npy %s'%(fn, fn))
 
 
