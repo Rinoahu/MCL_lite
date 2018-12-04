@@ -18747,6 +18747,23 @@ def get_connect_disk(qry, tmp_path):
     return cs
 
 
+
+# remove empty sparse matrix
+def rm_empty(qry, tmp_path):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    for fn in fns:
+        x = load_npz_disk(fn)
+        nnz = x.indptr.size
+        csr_close(x)
+        if nnz == 0:
+            os.system('rm %s'%fn)
+
+
+
 # memmap based mcl, no memory limit
 def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, pct=.9, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4, alg='mcl'):
 
@@ -18854,6 +18871,9 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     #chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
     #prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
 
+    # check and remove empty sparse matrix
+    rm_empty(qry, tmp_path=tmp_path)
+
     fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
     if not fnMgs:
         #chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
@@ -18869,6 +18889,10 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     for it in xrange(itr):
 
         print 'iteration', it
+
+        print 'rm empty sparse matrix'
+        rm_empty(qry, tmp_path=tmp_path)
+
 
         #print 'merge'
         if it == 0 or alg == 'mcl':
