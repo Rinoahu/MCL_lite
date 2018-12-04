@@ -18897,6 +18897,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
     #else:
     #    os.system('rm %s/*_Mg.npy' % tmp_path)
+    os.system('rm %s/*_elm.npy' % tmp_path)
 
     chao_old = np.inf
     #return load_npz_disk('0.npz.npy')
