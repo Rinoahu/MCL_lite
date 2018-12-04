@@ -21,6 +21,8 @@ from scipy import sparse as sps
 import tempfile
 import cPickle
 
+from collections import Counter
+
 from threading import Thread
 from sklearn.externals.joblib import Parallel, delayed
 
@@ -8857,7 +8859,7 @@ def prune_p(indptr, indices, data, prune=1e-4, pct=.9, R=800, S=700, cpu=1, inpl
                 if val <= thres:
                     #data[i] = val >= thres and val or 0
                     data[i] = 0
-                    #indices[i] = -1
+                    indices[i] = -1
 
     return mi, ct
 
@@ -18753,14 +18755,28 @@ def rm_empty(qry, tmp_path):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
+    freq = Counter()
     #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
     fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
     for fn in fns:
         x = load_npz_disk(fn)
+        freq[x.shape] += 1
         nnz = x.indptr.size
         csr_close(x)
         if nnz == 0:
             os.system('rm %s'%fn)
+
+    freq = freq.items()
+    freq.sort(key=lambda x:x[1])
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    for fn in fns:
+        x = load_npz_disk(fn)
+        shape = x.shape
+        csr_close(x)
+
+        if shape == freq[-1]:
+            os.system('rm %s'%fn)
+
 
 
 
@@ -18879,9 +18895,8 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
         #chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
         prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
         chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
-    else:
-        os.system('rm %s/*_Mg.npy' % tmp_path)
-
+    #else:
+    #    os.system('rm %s/*_Mg.npy' % tmp_path)
 
     chao_old = np.inf
     #return load_npz_disk('0.npz.npy')
