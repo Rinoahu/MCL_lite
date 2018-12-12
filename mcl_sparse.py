@@ -1193,9 +1193,11 @@ def csrmm_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
 
     #chk = max(R // cpu, 1<<24)
 
-    cpu = max(1, xc.size // (1<<24))
-    chk = max(1, R // cpu+1)
+    #cpu = max(1, xc.size // (1<<24))
+    #chk = max(1, R // cpu+1)
 
+    cpu = max(1, cpu)
+    chk = max(1<<24, R // cpu+1)
 
     idxs = np.arange(0, R, chk)
     block = idxs.size
@@ -1502,8 +1504,11 @@ def csrmm_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    cpu = max(1, xc.size // (1<<24))
-    chk = max(1, R // cpu+1)
+    #cpu = max(1, xc.size // (1<<24))
+    #chk = max(1, R // cpu+1)
+
+    cpu = max(1, cpu)
+    chk = max(1<<24, R // cpu+1)
 
     idxs = np.arange(0, R, chk)
     block = idxs.size
@@ -18386,15 +18391,19 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
 
 
     # reduce the size of the fns
+    nnz = 0
     if 1:
         for fn in fns:
             x = load_npz_disk(fn)
             y = sparse.csr_matrix(x.shape)
             z = csram_p_ez(x, y, prefix=fn+'_elm.npy', tmp_path=tmp_path, disk=True, cpu=cpu)
             #print os.listdir(tmp_path)
+            nnz += z.nnz
+            csr_close(x)
+            csr_close(y)
             os.system('mv %s_elm.npy %s'%(fn, fn))
 
-
+    return nnz
     #Nbit = mem * 2 ** 30 / 8
     #workers = []
     #bit = 0
@@ -18904,6 +18913,7 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
     nochange = 0
     for it in xrange(itr):
 
+        print '#' * 80
         print 'iteration', it
 
         print 'rm empty sparse matrix'
@@ -18945,7 +18955,8 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
 
 
         print 'prune'
-        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
+        NNZ = prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
+        print 'prune nnz', NNZ
 
 
         print 'inflate'
