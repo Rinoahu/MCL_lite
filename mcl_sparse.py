@@ -3928,12 +3928,27 @@ def csram_bp(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
 
 
 
+@njit(nogil=True, cache=True, parallel=True)
+def nan_to_num(x):
+    n = x.size
+    for i in prange(n):
+        if np.isnan(x[i]):
+            x[i] = 0
+
+        #if not np.isnan(x[i]):
+        #    continue
+        #else:
+        #    x[i] = 0
+
 
 
 
 def csram_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
-    np.nan_to_num(a.data, copy=False)
-    np.nan_to_num(b.data, copy=False)
+    #np.nan_to_num(a.data, copy=False)
+    nan_to_num(a.data)
+
+    #np.nan_to_num(b.data, copy=False)
+    nan_to_num(b.data)
 
     xr, xc, x = a.indptr, a.indices, a.data
     yr, yc, y = b.indptr, b.indices, b.data
