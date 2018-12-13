@@ -3945,11 +3945,11 @@ def nan_to_num(x):
 
 def csram_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     #np.nan_to_num(a.data, copy=False)
-    print a.data
-    nan_to_num(a.data)
+    #print a.data[:10]
+    #nan_to_num(a.data)
 
     #np.nan_to_num(b.data, copy=False)
-    nan_to_num(b.data)
+    #nan_to_num(b.data)
 
     xr, xc, x = a.indptr, a.indices, a.data
     yr, yc, y = b.indptr, b.indices, b.data
