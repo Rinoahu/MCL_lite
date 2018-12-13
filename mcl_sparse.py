@@ -3945,6 +3945,7 @@ def nan_to_num(x):
 
 def csram_p_ez(a, b, mm='msav', cpu=1, prefix=None, tmp_path=None, disk=False):
     #np.nan_to_num(a.data, copy=False)
+    print a.data
     nan_to_num(a.data)
 
     #np.nan_to_num(b.data, copy=False)
