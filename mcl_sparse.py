@@ -3295,8 +3295,9 @@ def csram_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
     D = yr.size
 
     cache = 1 << 26
-    Thread = max(1, xc.size // cache)
+    #Thread = max(1, xc.size // cache)
     #Thread = 64
+    Thread = max(1, cpu)
     chk = max(1, R // Thread + 1)
 
     idxs = np.arange(0, R, chk)
@@ -3553,6 +3554,7 @@ def csram_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=1):
     cache = 1 << 26
     Thread = max(1, xc.size // cache)
     #Thread = 64
+    Thread = max(1, cpu)
     chk = max(1, R // Thread + 1)
 
     idxs = np.arange(0, R, chk)
