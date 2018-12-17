@@ -18208,6 +18208,196 @@ def expand_t(xyz):
 
 
 
+def expand_prune_inflate_t(xyz):
+    fnx, fnmerge, I, prune, pct, R, S, inplace, cpu, mem = xyz
+    x = load_npz_disk(fnx)
+    fnz = fnx + '_z.npy'
+    # update x
+
+    fny = fns[0]
+    y = load_npz_disk(fny)
+    z = csrmm_p_ez_fast(y, x, prefix=fnz, cpu=cpu, disk=True)
+
+    csr_close(x)
+    csr_close(y)
+    csr_close(z)
+    del z
+    os.system('mv %s %s'%(fnz, fnx))
+
+    # prune
+    x = load_npz_disk(fnx)
+    #print 'prune_t, R, S', prune, pct, R, S
+    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
+    csr_close(x)
+
+    x = load_npz_disk(fnx)
+    y = sparse.csr_matrix(x.shape)
+    z = csram_p_ez(x, y, prefix=fnx+'_elm.npy', tmp_path=tmp_path, disk=True, cpu=cpu)
+    nnz += z.nnz
+    csr_close(x)
+    csr_close(y)
+    os.system('mv %s_elm.npy %s'%(fnx, fnx))
+
+    # inflate
+    x = load_npz_disk(fnx)
+    chao = inflate_norm_p_ez(x, I=I, cpu=cpu)
+    #chao_mx = max(chao_mx, chao)
+    csr_close(x)
+
+    return chao
+
+
+def expand_prune_inflate_disk(qry, shape=(10**8, 10**8), tmp_path=None, I=1.5, cpu=1, mem=4, prune=1e-4, pct=.9, R=800, S=700, inplace=1):
+
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy') and not elem.endswith('_merge.npy')]
+
+    fnmerge = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+
+    if not fnmerge:
+        fnmerge = fns
+
+
+    chaos = map(expand_prune_inflate_t, [[fnx, fnmerge, I, prune, pct, R, S, inplace, cpu, mem] for fnx in fns])
+
+    return max(chaos)
+
+
+
+# memmap based mcl, no memory limit
+def mcl_nr_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover=1400, pct=.9, itr=100, rtol=1e-5, atol=1e-8, check=5, cpu=1, chunk=5*10**7, outfile=None, sym=False, rsm=False, mem=4, alg='mcl'):
+
+    if alg != 'mcl':
+        cpu = max(cpu, 2)
+
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    if rsm == False:
+        os.system('mkdir -p %s' % tmp_path)
+        os.system('rm -rf %s/*' % tmp_path)
+
+        q2n, block = mat_split(qry, tmp_path=tmp_path, chunk=chunk, cpu=cpu, sym=sym, mem=mem, recover=recover, select=select)
+
+        N = len(q2n)
+
+        # save q2n to disk
+        print 'saving q2n to disk'
+        _o = open(tmp_path + '_dict.pkl', 'wb')
+        cPickle.dump(q2n, _o, cPickle.HIGHEST_PROTOCOL)
+        _o.close()
+
+        del q2n
+        gc.collect()
+    else:
+        f = open(tmp_path + '_dict.pkl', 'rb')
+        q2n = cPickle.load(f)
+        N = len(q2n)
+
+        os.system('rm %s/*tmp*.npy %s/*_z.npy' % (tmp_path, tmp_path))
+
+        f.close()
+
+    shape = (N, N)
+    # convert xyz to csr
+
+    Edge = N * max(recover, select)
+    xyzs = [[tmp_path, elem, shape] for elem in os.listdir(tmp_path) if elem.endswith('.npz')]
+
+    if xyzs:
+        fns = Parallel(n_jobs=cpu)(delayed(xyz2csr_t)(xyz) for xyz in xyzs)
+
+    # merge all the submatrix
+    # check and remove empty sparse matrix
+    rm_empty(qry, tmp_path=tmp_path)
+
+    fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+    if not fnMgs:
+        prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
+        chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
+    os.system('rm %s/*_elm.npy' % tmp_path)
+
+    chao_old = np.inf
+    nochange = 0
+    for it in xrange(itr):
+
+        print '#' * 80
+        print 'iteration', it
+
+        print 'rm empty sparse matrix'
+        rm_empty(qry, tmp_path=tmp_path)
+
+        #print 'merge'
+        if it == 0 or alg == 'mcl':
+
+            fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+            if not fnMgs:
+                fnMgs = merge_disk(qry, tmp_path, cpu=cpu, mem=mem)
+
+        if alg == 'mcl':
+            print 'expansion', cpu
+        else:
+            print 'regularize', cpu
+
+        chao = expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu, mem=mem)
+
+        # remove Mg file
+        if alg == 'mcl':
+            fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+            print 'removing', fnMgs
+            for fnMg in fnMgs:
+                os.system('rm -f %s/%s'%(tmp_path, fnMg))
+
+            fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
+            print 'after_removing', fnMgs
+
+
+        if abs(chao - chao_old) < 1e-6:
+            nochange += 1
+        else:
+            nochange = 0
+
+        chao_old = chao
+
+
+        if chao < 1e-3 and it > 0:
+            break
+        elif alg != 'mcl' and nochange >= 10:
+            break
+        else:
+            pass
+
+
+    cs = get_connect_disk(qry, tmp_path=tmp_path)
+    f = open(tmp_path + '_dict.pkl', 'rb')
+    q2n = cPickle.load(f)
+    f.close()
+    os.system('rm %s_dict.pkl' % tmp_path)
+    groups = {}
+    for k, v in q2n.iteritems():
+        c = cs[1][v]
+        try:
+            groups[c].append(k)
+        except:
+            groups[c] = [k]
+
+    del c
+    gc.collect()
+    if outfile and type(outfile) == str:
+        _o = open(outfile, 'w')
+    for v in groups.itervalues():
+        out = '\t'.join(v)
+        if outfile == None:
+            print out
+        else:
+            _o.writelines([out, '\n'])
+    if outfile and type(outfile) == str:
+        _o.close()
+
+
+
 
 def expand_disk(qry, shape=(10**8, 10**8), tmp_path=None, cpu=1, mem=4):
 
@@ -19034,11 +19224,6 @@ def mcl_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, recover
             _o.writelines([out, '\n'])
     if outfile and type(outfile) == str:
         _o.close()
-
-
-
-
-
 
 
     raise SystemExit()
@@ -20049,8 +20234,11 @@ if __name__ == '__main__':
         #mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
         #mcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
         #    sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
-        x = mcl_disk(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
-            sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
+        #x = mcl_disk(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
+        #    sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
+
+        x = mcl_nr_disk(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
+
 
     else:
         #mcl(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm)
@@ -20058,8 +20246,10 @@ if __name__ == '__main__':
         #rmcl(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
         #     sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv)
 
-        mcl_disk(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
-            sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv, alg='rmcl')
+        #mcl_disk(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn,
+        #    sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv, alg='rmcl')
+
+        mcl_nr_disk(qry, tmp_path=tmp_dir, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym, mem=mem, rsm=rsm, prune=pru, select=slc, recover=rcv, alg='rmcl')
 
 
         #mcl_lite(qry, I=ifl, cpu=cpu, chunk=bch, outfile=ofn, sym=sym)
