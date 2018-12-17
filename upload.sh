@@ -9,7 +9,7 @@ git config --global user.name Rinoahu
 git remote rm origin
 
 git add -A .
-git commit -m 'Rewrite all the functions needed by MCL algorithm. Improve the performance'
+git commit -m 'reduce disk space usage'
 git remote add origin https://github.com/Rinoahu/MCL_lite
 
 git pull origin master

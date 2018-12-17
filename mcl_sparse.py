@@ -18209,7 +18209,7 @@ def expand_t(xyz):
 
 
 def expand_prune_inflate_t(xyz):
-    fnx, fnmerge, I, prune, pct, R, S, inplace, cpu, mem = xyz
+    fnx, fns, I, prune, pct, R, S, inplace, cpu, mem, tmp_path = xyz
     x = load_npz_disk(fnx)
     fnz = fnx + '_z.npy'
     # update x
@@ -18233,7 +18233,7 @@ def expand_prune_inflate_t(xyz):
     x = load_npz_disk(fnx)
     y = sparse.csr_matrix(x.shape)
     z = csram_p_ez(x, y, prefix=fnx+'_elm.npy', tmp_path=tmp_path, disk=True, cpu=cpu)
-    nnz += z.nnz
+    #nnz += z.nnz
     csr_close(x)
     csr_close(y)
     os.system('mv %s_elm.npy %s'%(fnx, fnx))
@@ -18259,8 +18259,7 @@ def expand_prune_inflate_disk(qry, shape=(10**8, 10**8), tmp_path=None, I=1.5, c
     if not fnmerge:
         fnmerge = fns
 
-
-    chaos = map(expand_prune_inflate_t, [[fnx, fnmerge, I, prune, pct, R, S, inplace, cpu, mem] for fnx in fns])
+    chaos = map(expand_prune_inflate_t, [[fnx, fns, I, prune, pct, R, S, inplace, cpu, mem, tmp_path] for fnx in fns])
 
     return max(chaos)
 
@@ -18341,7 +18340,8 @@ def mcl_nr_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, reco
         else:
             print 'regularize', cpu
 
-        chao = expand_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu, mem=mem)
+        #chao = expand_prune_inflate_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu, mem=mem)
+        chao = expand_prune_inflate_disk(qry, shape=shape, tmp_path=tmp_path, I=I, cpu=cpu, mem=mem, prune=prune, pct=pct, R=recover, S=select, inplace=1)
 
         # remove Mg file
         if alg == 'mcl':
