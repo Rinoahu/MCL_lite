@@ -278,10 +278,13 @@ def inflate_norm_p_fast(xr, xc, x, I=1.5, cpu=1, mem=4):
     R = xr.size
 
     cpu = max(1, cpu)
-    chk = max(1, R // cpu)
-    chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
-    chk = max(1<<26, chk)
+    #chk = max(1, R // cpu)
+    #chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
+    #chk = max(1<<26, chk)
     #chk = 10000
+    cache = mem * (1<<29) // cpu
+    cache = int(cache) + 1
+    chk = max(cache, R // cpu + 1)
 
     idxs = np.arange(0, R, chk)
     block = idxs.size
@@ -2114,6 +2117,9 @@ def csrmm_1pass_p_fast(xr, xc, x, yr, yc, y, cpu=1, mem=4):
 
     #cpu = 1
     cache = 1 << 26
+    cache = mem * (1<<29) // cpu
+    cache = int(cache) + 1
+
     Thread = max(1, xc.size // cache)
     #Thread = 64
     chk = max(1, R // Thread+1)
@@ -2350,6 +2356,9 @@ def csrmm_2pass_p_fast(xr, xc, x, yr, yc, y, zr, zc, z, offset, cpu=1):
     #chk = R // cpu
 
     cache = 1 << 26
+    cache = mem * (1<<29) // cpu
+    cache = int(cache) + 1
+
     Thread = max(1, xc.size // cache)
     #Thread = 64
     chk = max(1, R // Thread+1)
@@ -3390,6 +3399,9 @@ def csram_1pass_p(xr, xc, x, yr, yc, y, cpu=1):
     D = yr.size
 
     cache = 1 << 26
+    cache = mem * (1<<29) // cpu
+    cache = int(cache) + 1
+
     #Thread = max(1, xc.size // cache)
     #Thread = 64
     Thread = max(1, cpu)
@@ -3646,7 +3658,11 @@ def csram_2pass_p(xr, xc, x, yr, yc, y, zr, zc, z, zptr, cpu=1):
     #chk = max(R // cpu, 1<<24)
     #chk = R // cpu
 
-    cache = 1 << 26
+    #cache = 1 << 26
+    cache = mem * (1<<29) // cpu
+    cache = int(cache) + 1
+
+
     Thread = max(1, xc.size // cache)
     #Thread = 64
     Thread = max(1, cpu)
