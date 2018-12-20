@@ -272,6 +272,98 @@ def inflate_norm_p(xr, xc, x, I=1.5, cpu=1, mem=4):
 
 
 
+@njit(fastmath=True, nogil=True, cache=True, parallel=True)
+def inflate_norm_p_fast(xr, xc, x, I=1.5, cpu=1, mem=4):
+
+    R = xr.size
+
+    cpu = max(1, cpu)
+    chk = max(1, R // cpu)
+    chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
+    chk = max(1<<26, chk)
+
+    idxs = np.arange(0, R, chk)
+    block = idxs.size
+    blocks = idxs.size
+
+    starts = np.empty(block+1, np.int64)
+    starts[:block] = idxs
+    starts[-1] = R
+
+    row_sums = np.zeros((cpu, R), dtype=np.float32)
+    End = 0 
+    for bst in xrange(0, blocks, cpu):
+        bed = min(bst + cpu, blocks)
+
+        #for idx in prange(block):
+        for idx in prange(bst, bed):
+            Le, Rt = starts[idx: idx+2]
+            r = Le // chk
+            r = idx
+            r = idx - bst
+            Rt = min(R-1, Rt)
+            for i in xrange(Le, Rt):
+                # get ith row of a
+                kst, ked = xr[i], xr[i+1]
+                if kst == ked:
+                    continue
+
+                for k in xrange(kst, ked):
+                    x_col, x_val = xc[k], x[k]
+                    # inflation
+                    x_val = np.power(x_val, I)
+                    #x[k] = x_val
+                    row_sums[r, x_col] += x_val
+                    End = max(End, x_col)
+
+    End += 1 
+    row_sum = np.zeros(R, dtype=np.float32)
+    #for i in xrange(block):
+    for i in xrange(cpu):
+        #for j in xrange(R):
+        for j in xrange(End):
+            row_sum[j] += row_sums[i, j]
+
+
+    #row_sums_sqs = np.zeros((block, R), dtype=np.float32)
+    row_sums_sqs = np.zeros((cpu, End), dtype=np.float32)
+
+    #row_maxs = np.zeros((block, R), dtype=np.float32)
+    row_maxs = np.zeros((cpu, End), dtype=np.float32)
+
+    for bst in xrange(0, blocks, cpu):
+        bed = min(bst + cpu, blocks)
+
+        # normalization and get the chaos
+        #for idx in prange(block):
+        for idx in prange(bst, bed):
+            Le, Rt = starts[idx: idx+2]
+            r = Le // chk
+            r = idx - bst
+
+            Rt = min(R-1, Rt)
+            for i in xrange(Le, Rt):
+                # get ith row of a
+                kst, ked = xr[i], xr[i+1]
+                if kst == ked:
+                    continue
+
+                for k in xrange(kst, ked):
+                    x_col, x_val = xc[k], x[k]
+                    x_val = np.power(x_val, I)
+                    rsum = row_sum[x_col]
+                    #x[k] = rsum != 0 and x_val / rsum or x_val
+                    if rsum != 0:
+                        x[k] = x_val / rsum 
+                    else:
+                        x[k] = 0
+
+                    row_sums_sqs[r, x_col] += x[k] * x[k]
+                    row_maxs[r, x_col] = max(row_maxs[r, x_col], x[k])
+
+    return row_maxs, row_sums_sqs
+
+
 # normalization of row
 @njit(fastmath=True, nogil=True, cache=True, parallel=True)
 def inflate_norm_p0(xr, xc, x, I=1.5, cpu=1, mem=4):
@@ -304,7 +396,9 @@ def inflate_norm_p0(xr, xc, x, I=1.5, cpu=1, mem=4):
 
 # inflation and normalization
 def inflate_norm_p_ez(x, I=1.5, cpu=1, mem=4):
-    row_maxs, row_sums_sqs = inflate_norm_p(x.indptr, x.indices, x.data, I=I, cpu=cpu, mem=mem)
+    #row_maxs, row_sums_sqs = inflate_norm_p(x.indptr, x.indices, x.data, I=I, cpu=cpu, mem=mem)
+    row_maxs, row_sums_sqs = inflate_norm_p_fast(x.indptr, x.indices, x.data, I=I, cpu=cpu, mem=mem)
+
     chaos = np.nanmax(row_maxs, 0) - np.nansum(row_sums_sqs, 0)
     return chaos.max()
 
