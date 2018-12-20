@@ -18457,17 +18457,18 @@ def mcl_nr_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, reco
 
         #chao = expand_prune_inflate_disk(qry, shape=shape, tmp_path=tmp_path, cpu=cpu, mem=mem)
         chao = expand_prune_inflate_disk(qry, shape=shape, tmp_path=tmp_path, I=I, cpu=cpu, mem=mem, prune=prune, pct=pct, R=recover, S=select, inplace=1)
-        print 'chao is', chao, chao_old
+        #print 'chao is', chao, chao_old
+        print 'chao is', chao
 
         # remove Mg file
         if alg == 'mcl':
             fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
-            print 'removing', fnMgs
+            #print 'removing', fnMgs
             for fnMg in fnMgs:
                 os.system('rm -f %s/%s'%(tmp_path, fnMg))
 
             fnMgs = [elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
-            print 'after_removing', fnMgs
+            #print 'after_removing', fnMgs
 
 
         if abs(chao - chao_old) < 1e-6:
