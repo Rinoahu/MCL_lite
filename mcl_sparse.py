@@ -281,6 +281,7 @@ def inflate_norm_p_fast(xr, xc, x, I=1.5, cpu=1, mem=4):
     chk = max(1, R // cpu)
     chk = mem > 0 and mem * (1<<30) // cpu or R // cpu
     chk = max(1<<26, chk)
+    #chk = 10000
 
     idxs = np.arange(0, R, chk)
     block = idxs.size
