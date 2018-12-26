@@ -18319,7 +18319,7 @@ def expand_t(xyz):
 
 
 
-def expand_prune_inflate_t(xyz):
+def expand_prune_inflate_t0(xyz):
     fnx, fns, I, prune, pct, R, S, inplace, cpu, mem, tmp_path = xyz
 
     #print 'fnx, fns', fnx, fns
@@ -18360,6 +18360,57 @@ def expand_prune_inflate_t(xyz):
     csr_close(x)
 
     return chao
+
+
+# optimized for resume
+def expand_prune_inflate_t(xyz):
+    fnx, fns, I, prune, pct, R, S, inplace, cpu, mem, tmp_path = xyz
+
+    #print 'fnx, fns', fnx, fns
+
+    # expansion
+    fnz = fnx + '_z.npy'
+    # avoid repeat calculation
+    if not os.path.isfile(fnz):
+        x = load_npz_disk(fnx)
+        # update x
+        fny = fns[0]
+        y = load_npz_disk(fny)
+        z = csrmm_p_ez_fast(y, x, prefix=fnz, cpu=cpu, disk=True)
+
+        csr_close(x)
+        csr_close(y)
+        csr_close(z)
+        del z
+    os.system('mv %s %s'%(fnz, fnx))
+
+    # prune
+    x = load_npz_disk(fnx)
+    #print 'prune_t, R, S', prune, pct, R, S
+    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
+    csr_close(x)
+
+    # eliminate
+    x = load_npz_disk(fnx)
+    y = sparse.csr_matrix(x.shape)
+    z = csram_p_ez(x, y, prefix=fnx+'_elm.npy', tmp_path=tmp_path, disk=True, cpu=cpu)
+    #nnz += z.nnz
+    csr_close(x)
+    csr_close(y)
+    os.system('mv %s_elm.npy %s'%(fnx, fnx))
+
+    # inflate
+    x = load_npz_disk(fnx)
+    chao = inflate_norm_p_ez(x, I=I, cpu=cpu)
+    #chao_mx = max(chao_mx, chao)
+    csr_close(x)
+
+    return chao
+
+
+
+
+
 
 
 def expand_prune_inflate_disk(qry, shape=(10**8, 10**8), tmp_path=None, I=1.5, cpu=1, mem=4, prune=1e-4, pct=.9, R=800, S=700, inplace=1):
@@ -18410,7 +18461,8 @@ def mcl_nr_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, reco
         q2n = cPickle.load(f)
         N = len(q2n)
 
-        os.system('rm %s/*tmp*.npy %s/*_z.npy' % (tmp_path, tmp_path))
+        #os.system('rm %s/*tmp*.npy %s/*_z.npy' % (tmp_path, tmp_path))
+        os.system('rm %s/*tmp*.npy' % tmp_path)
 
         f.close()
 
@@ -18431,6 +18483,7 @@ def mcl_nr_disk(qry, tmp_path=None, xy=[], I=1.5, prune=1/4e3, select=1100, reco
     if not fnMgs:
         prune_disk(qry, tmp_path=tmp_path, cpu=cpu, prune=prune, S=select, R=recover, pct=pct, inplace=1, mem=mem)
         chao = inflate_norm_disk(qry, I=1, tmp_path=tmp_path, cpu=cpu, mem=mem)
+
     os.system('rm %s/*_elm.npy' % tmp_path)
 
     chao_old = np.inf
@@ -18699,7 +18752,7 @@ def prune_t(xyzs):
 
 
 # prune on disk
-def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, cpu=1, mem=4):
+def prune_disk0(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, cpu=1, mem=4):
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
@@ -18750,7 +18803,40 @@ def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, 
     #    workers = []
     #    bit = 0
   
-        
+    
+def prune_disk(qry, tmp_path=None, prune=1e-4, pct=.9, R=800, S=700, inplace=1, cpu=1, mem=4):
+    if tmp_path == None:
+        tmp_path = qry + '_tmpdir'
+
+    #fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy')]
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy') and not elem.endswith('_merge.npy')]
+
+
+    #for fn in fns:
+    #    x = load_npz_disk(fn)
+    #    mi, ct = prune_p_ez(x, prune=prune, pct=pct, R=R, S=S, cpu=cpu, inplace=inplace, mem=mem)
+    #Parallel(n_jobs=cpu)(delayed(prune_t)([fn, prune, pct, R, S, 1, inplace, mem]) for fn in fns)
+    map(prune_t, [[fn, prune, pct, R, S, cpu, inplace, mem] for fn in fns])
+
+
+    # reduce the size of the fns
+    nnz = 0
+    if 1:
+        for fn in fns:
+            if not os.path.isfile(fn+'_elm.npy'):
+                x = load_npz_disk(fn)
+                y = sparse.csr_matrix(x.shape)
+                z = csram_p_ez(x, y, prefix=fn+'_elm.npy', tmp_path=tmp_path, disk=True, cpu=cpu)
+                #print os.listdir(tmp_path)
+                nnz += z.nnz
+                csr_close(x)
+                csr_close(z)
+
+            os.system('mv %s_elm.npy %s'%(fn, fn))
+
+    return nnz
+
+
 
 # get connect comp from graph
 @njit(fastmath=True, nogil=True, parallel=True, cache=True)

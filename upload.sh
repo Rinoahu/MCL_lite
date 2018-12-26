@@ -9,7 +9,7 @@ git config --global user.name Rinoahu
 git remote rm origin
 
 git add -A .
-git commit -m 'reduce disk space usage'
+git commit -m 'debug for resume'
 git remote add origin https://github.com/Rinoahu/MCL_lite
 
 git pull origin master
