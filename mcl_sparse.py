@@ -18418,7 +18418,7 @@ def expand_prune_inflate_disk(qry, shape=(10**8, 10**8), tmp_path=None, I=1.5, c
     if tmp_path == None:
         tmp_path = qry + '_tmpdir'
 
-    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npy') and not elem.endswith('_Mg.npy') and not elem.endswith('_merge.npy')]
+    fns = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('.npz.npy') and not elem.endswith('_Mg.npy') and not elem.endswith('_merge.npy') and not elem.endswith('_z.npy') and not elem.endswith('_elm.npy')]
 
     fnmerge = [tmp_path + '/' + elem for elem in os.listdir(tmp_path) if elem.endswith('_Mg.npy')]
 
